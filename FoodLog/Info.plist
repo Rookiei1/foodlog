@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh-Hans</string>
+	<key>CFBundleDisplayName</key>
+	<string>食刻</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>食刻需要使用相机拍摄您的餐食或包装营养成分表，以便记录饮食并在您授权后调用已配置的 AI 模型估算营养成分。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>食刻需要访问相册以选择您的餐食照片或营养成分表图片，用于饮食记录与营养分析。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>食刻需要保存导出的图表或饮食报告图片到相册。</string>
+</dict>
+</plist>
