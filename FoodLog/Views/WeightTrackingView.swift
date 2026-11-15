@@ -335,7 +335,7 @@ public struct WeightTrackingView: View {
             Text("周均体重")
                 .font(.headline)
 
-            ForEach(trendSummary.weeklyAverages.reversed().prefix(4)) { week in
+            ForEach(Array(trendSummary.weeklyAverages.reversed().prefix(4))) { week in
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(week.weekLabel)

@@ -106,7 +106,7 @@ public enum FoodLogTheme {
         case .breakfast: return Color(red: 0.96, green: 0.58, blue: 0.18)
         case .lunch: return Color(red: 0.13, green: 0.72, blue: 0.44)
         case .dinner: return Color(red: 0.36, green: 0.46, blue: 0.94)
-        case .lateSnack: return Color(red: 0.62, green: 0.38, blue: 0.92)
+        case .lateNight: return Color(red: 0.62, green: 0.38, blue: 0.92)
         case .snack: return Color(red: 0.92, green: 0.38, blue: 0.52)
         }
     }

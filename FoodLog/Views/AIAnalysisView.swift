@@ -122,15 +122,15 @@ public struct AIAnalysisView: View {
                     icon: "scalemass.fill",
                     tint: FoodLogTheme.weightPurple,
                     title: "周期体重变化",
-                    value: digest.weightTrend.totalChangeKg.map { String(format: "%+.2f kg", $0) } ?? "--",
-                    sub: digest.weightTrend.weeklyRateKg.map { String(format: "%+.2f kg/周", $0) } ?? "记录 \(digest.loggedWeightDaysCount) 天"
+                    value: digest.weightChangeKg.map { String(format: "%+.2f kg", $0) } ?? "--",
+                    sub: digest.weeklyWeightRateKg.map { String(format: "%+.2f kg/周", $0) } ?? "称重 \(digest.loggedWeightDays) 天"
                 )
                 digestMetricTile(
                     icon: "calendar.badge.checkmark",
                     tint: FoodLogTheme.fatAmber,
-                    title: "有效记录天数",
-                    value: "\(digest.loggedFoodDaysCount) 天",
-                    sub: digest.underEatingDates.isEmpty ? "全周期达标" : "偏低 \(digest.underEatingDates.count) 天"
+                    title: "饮食记录天数",
+                    value: "\(digest.loggedFoodDays) / \(digest.totalCalendarDays) 天",
+                    sub: digest.underEatingDayKeys.isEmpty ? "无摄入不足日" : "摄入不足 \(digest.underEatingDayKeys.count) 天"
                 )
             }
 

@@ -281,7 +281,7 @@ public struct FoodLogListView: View {
                         let carb = fav.carbPer100g * fav.defaultGrams / 100.0
 
                         HStack(spacing: 12) {
-                            FoodThumbnailBadge(photoFilename: nil, mealType: fav.defaultMealType, size: 42)
+                            FoodThumbnailBadge(photoFilename: nil, mealType: fav.snapshot.defaultMealType, size: 42)
 
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(fav.name)

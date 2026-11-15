@@ -407,7 +407,7 @@ public struct AIPhotoRecognitionSheet: View {
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(FoodLogTheme.calorieGreen)
                 Spacer()
-                let totalKcal = response.items.filter(\.isSelected).reduce(0) { $0 + $1.calories }
+                let totalKcal = response.items.filter(\.isSelected).reduce(0.0) { $0 + $1.calories }
                 Text("已选合计 \(Int(totalKcal.rounded())) kcal")
                     .font(.caption.weight(.bold).monospacedDigit())
                     .foregroundStyle(.secondary)
