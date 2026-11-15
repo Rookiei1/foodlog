@@ -404,7 +404,7 @@ public struct HistoryView: View {
                     .pickerStyle(.segmented)
 
                     // Swift Charts Line Plot
-                    if weightTrendSummary.trendPoints.isEmpty {
+                    if weightTrendSummary.dailyPoints.isEmpty {
                         VStack(spacing: 8) {
                             Text("该时间区间内暂无体重数据")
                                 .font(.footnote)
@@ -413,7 +413,7 @@ public struct HistoryView: View {
                         .frame(maxWidth: .infinity, minHeight: 160)
                     } else {
                         Chart {
-                            ForEach(weightTrendSummary.trendPoints) { pt in
+                            ForEach(weightTrendSummary.dailyPoints) { pt in
                                 LineMark(
                                     x: .value("日期", pt.date),
                                     y: .value("体重", pt.weightKg)
@@ -506,7 +506,7 @@ public struct HistoryView: View {
     }
 
     private var weightYScaleDomain: ClosedRange<Double> {
-        let values = weightTrendSummary.trendPoints.map(\.weightKg) + [appState.profile.targetWeightKg]
+        let values = weightTrendSummary.dailyPoints.map(\.weightKg) + [appState.profile.targetWeightKg]
         let minV = (values.min() ?? 60.0) - 1.5
         let maxV = (values.max() ?? 70.0) + 1.5
         return minV...maxV
