@@ -5,9 +5,11 @@ on:
     branches: [main]
     paths-ignore:
       - ".github/workflows/testflight.yml"
+      - ".github/workflows/test.yml"
       - "ci/prepare_apple_key.py"
       - "README.md"
       - "RELEASE.md"
+      - "项目说明.md"
   workflow_dispatch:
 
 permissions:
