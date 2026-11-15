@@ -12,6 +12,10 @@ public struct DailyNutritionMetrics: Equatable, Sendable {
     public var targetCarbGrams: Double
     public var entriesByMeal: [MealType: [FoodEntrySnapshot]]
 
+    public var totalCount: Int {
+        entriesByMeal.values.reduce(0) { $0 + $1.count }
+    }
+
     public var remainingCalories: Double {
         targetCalories - totalCalories
     }

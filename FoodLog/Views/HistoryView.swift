@@ -440,18 +440,6 @@ public struct HistoryView: View {
                                 }
                         }
                         .chartYScale(domain: weightYScaleDomain)
-                        .chartXAxis {
-                            AxisMarks { _ in
-                                AxisGridLine()
-                                AxisValueLabel(format: .dateTime.month().day())
-                            }
-                        }
-                        .chartYAxis {
-                            AxisMarks(position: .leading) { _ in
-                                AxisGridLine()
-                                AxisValueLabel()
-                            }
-                        }
                         .frame(height: 190)
                     }
                 }
