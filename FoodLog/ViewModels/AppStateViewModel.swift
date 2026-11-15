@@ -3,9 +3,7 @@ import SwiftUI
 
 public enum MainTab: String, CaseIterable, Identifiable, Sendable {
     case dashboard = "dashboard"
-    case food = "food"
-    case weight = "weight"
-    case analysis = "analysis"
+    case history = "history"
     case settings = "settings"
 
     public var id: String { rawValue }
@@ -13,9 +11,7 @@ public enum MainTab: String, CaseIterable, Identifiable, Sendable {
     public var title: String {
         switch self {
         case .dashboard: return "首页"
-        case .food: return "饮食"
-        case .weight: return "体重"
-        case .analysis: return "AI 分析"
+        case .history: return "历史"
         case .settings: return "设置"
         }
     }
@@ -23,9 +19,7 @@ public enum MainTab: String, CaseIterable, Identifiable, Sendable {
     public var systemImage: String {
         switch self {
         case .dashboard: return "flame.fill"
-        case .food: return "fork.knife"
-        case .weight: return "scalemass.fill"
-        case .analysis: return "wand.and.stars"
+        case .history: return "clock.arrow.circlepath"
         case .settings: return "gearshape.fill"
         }
     }
@@ -50,6 +44,8 @@ public final class AppStateViewModel: ObservableObject {
 
     // Sheet presentation states
     @Published public var isPresentingPhotoRecognitionSheet: Bool = false
+    @Published public var isPresentingDailyGoalEditor: Bool = false
+    @Published public var historySegment: String = "food"
     @Published public var isPresentingFoodEditorSheet: Bool = false
     @Published public var presetMealForEditor: MealType = .lunch
     @Published public var editingFoodSnapshot: FoodEntrySnapshot? = nil

@@ -351,6 +351,8 @@ public enum HTTPErrorMapper {
     }
 }
 
+public typealias LocalMockAIAdapter = MockAIProviderAdapter
+
 public struct MockAIProviderAdapter: AIProviderAdapter {
     public init() {}
 
@@ -529,13 +531,25 @@ public enum AIProviderRouter {
         guard config.supportsVision else {
             throw AIServiceError.modelDoesNotSupportVision(modelName: config.modelName)
         }
-        // 2. Check API Key if required
+        // 2. Check API Key if required (smooth fallback to local mock if DeepSeek key is missing)
         let apiKey: String
         if config.kind.requiresAPIKey {
-            guard let stored = keychain.readSecret(forAccount: config.id.uuidString), !stored.isEmpty else {
+            let stored = keychain.readSecret(forAccount: config.id.uuidString)
+            if let storedKey = stored, !storedKey.isEmpty {
+                apiKey = storedKey
+            } else if config.kind == .deepSeek {
+                // Smooth fallback to mock adapter when DeepSeek API key is not configured
+                let mockAdapter = MockAIProviderAdapter()
+                return try await mockAdapter.recognizeFood(
+                    images: images,
+                    mealType: mealType,
+                    userHint: userHint,
+                    config: config,
+                    apiKey: "mock-no-key-required"
+                )
+            } else {
                 throw AIServiceError.missingAPIKey(providerName: config.name)
             }
-            apiKey = stored
         } else {
             apiKey = "mock-no-key-required"
         }

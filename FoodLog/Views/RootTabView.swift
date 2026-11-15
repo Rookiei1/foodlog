@@ -17,26 +17,12 @@ public struct RootTabView: View {
                     .tag(MainTab.dashboard)
                     .accessibilityIdentifier("tab-dashboard")
 
-                FoodLogListView()
+                HistoryView()
                     .tabItem {
-                        Label(MainTab.food.title, systemImage: MainTab.food.systemImage)
+                        Label(MainTab.history.title, systemImage: MainTab.history.systemImage)
                     }
-                    .tag(MainTab.food)
-                    .accessibilityIdentifier("tab-food")
-
-                WeightTrackingView()
-                    .tabItem {
-                        Label(MainTab.weight.title, systemImage: MainTab.weight.systemImage)
-                    }
-                    .tag(MainTab.weight)
-                    .accessibilityIdentifier("tab-weight")
-
-                AIAnalysisView()
-                    .tabItem {
-                        Label(MainTab.analysis.title, systemImage: MainTab.analysis.systemImage)
-                    }
-                    .tag(MainTab.analysis)
-                    .accessibilityIdentifier("tab-analysis")
+                    .tag(MainTab.history)
+                    .accessibilityIdentifier("tab-history")
 
                 SettingsView()
                     .tabItem {
@@ -45,7 +31,7 @@ public struct RootTabView: View {
                     .tag(MainTab.settings)
                     .accessibilityIdentifier("tab-settings")
             }
-            .tint(FoodLogTheme.calorieGreen)
+            .tint(FoodLogTheme.deepCharcoalButton)
 
             if let banner = appState.statusBannerMessage {
                 Text(banner)
@@ -83,6 +69,10 @@ public struct RootTabView: View {
                 defaultDate: appState.selectedDate
             )
             .environmentObject(appState)
+        }
+        .sheet(isPresented: $appState.isPresentingDailyGoalEditor) {
+            DailyGoalAndProfileEditorSheet()
+                .environmentObject(appState)
         }
     }
 }

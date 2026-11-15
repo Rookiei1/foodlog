@@ -18,46 +18,47 @@ public struct SettingsView: View {
     @Query(sort: \SavedAnalysisReportRecord.createdAt, order: .reverse)
     private var savedReportRecords: [SavedAnalysisReportRecord]
 
-    @State private var editingProvider: AIProviderConfig? = nil
-    @State private var isAddingNewProvider: Bool = false
+    // DeepSeek API Configuration
+    @State private var apiKeyInput: String = ""
+    @State private var baseURLInput: String = "https://api.deepseek.com/v1"
+    @State private var selectedModel: String = "flash"
+    @State private var customModelText: String = ""
+    @State private var isTestingConnection: Bool = false
+    @State private var testStatusMessage: String? = nil
+    @State private var testSucceeded: Bool = false
 
+    // Export & Backup
     @State private var includePhotosInBackup: Bool = false
     @State private var exportedFoodCSVURL: URL? = nil
     @State private var exportedWeightCSVURL: URL? = nil
     @State private var exportedBackupJSONURL: URL? = nil
-    @State private var exportedLatestPDFURL: URL? = nil
     @State private var isImportingBackup: Bool = false
     @State private var backupStatusMessage: String? = nil
 
     public init() {}
 
+    private var deepSeekConfig: AIProviderConfig {
+        if let ds = appState.providers.first(where: { $0.kind == .deepSeek }) {
+            return ds
+        }
+        return AIProviderConfig(
+            id: UUID(uuidString: "11111111-2222-3333-4444-555555555503") ?? UUID(),
+            name: "DeepSeek API",
+            kind: .deepSeek,
+            baseURL: "https://api.deepseek.com/v1",
+            modelName: "flash"
+        )
+    }
+
     public var body: some View {
         NavigationStack {
             Form {
-                aiProvidersSection
-                defaultModelsSection
-                profileAndGoalsSection
+                deepSeekApiSection
                 exportAndBackupSection
                 aboutSection
             }
-            .navigationTitle("设置与数据管理")
+            .navigationTitle("设置与导出")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(item: $editingProvider) { provider in
-                AIProviderEditorSheet(provider: provider, isNew: false)
-                    .environmentObject(appState)
-            }
-            .sheet(isPresented: $isAddingNewProvider) {
-                AIProviderEditorSheet(
-                    provider: AIProviderConfig(
-                        name: "自定义服务",
-                        kind: .openAICompatible,
-                        baseURL: "https://api.openai.com/v1",
-                        modelName: "gpt-4o-mini"
-                    ),
-                    isNew: true
-                )
-                .environmentObject(appState)
-            }
             .fileImporter(
                 isPresented: $isImportingBackup,
                 allowedContentTypes: [.json],
@@ -66,201 +67,156 @@ public struct SettingsView: View {
                 handleBackupFileImport(result)
             }
             .onAppear {
+                loadDeepSeekConfig()
                 refreshExportFiles()
             }
         }
     }
 
-    private var aiProvidersSection: some View {
-        Section("AI 供应商与密钥") {
-            ForEach(appState.providers) { provider in
-                Button {
-                    editingProvider = provider
-                } label: {
-                    HStack(spacing: 12) {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(provider.supportsVision ? FoodLogTheme.calorieGreen.gradient : FoodLogTheme.proteinBlue.gradient)
-                            .frame(width: 32, height: 32)
-                            .overlay(
-                                Image(systemName: provider.supportsVision ? "eye.fill" : "text.bubble.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(.white)
-                            )
+    // MARK: - 1. DeepSeek API 配置（主推与默认）
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(provider.name)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
-                            Text(provider.modelName)
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(.secondary)
-                        }
+    private var deepSeekApiSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(FoodLogTheme.deepCharcoalButton)
+                        .frame(width: 32, height: 32)
+                        .overlay(
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(.white)
+                        )
 
-                        Spacer()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("DeepSeek API")
+                            .font(.headline)
+                            .foregroundStyle(FoodLogTheme.charcoalText)
+                        Text("用于拍照自动拆解菜品条目与估算热量")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
 
-                        if appState.hasAPIKey(for: provider) {
-                            Text(provider.kind.requiresAPIKey ? "已配置" : "内置")
-                                .font(.caption2.weight(.bold))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(FoodLogTheme.calorieGreen.opacity(0.14))
-                                .foregroundStyle(FoodLogTheme.calorieGreen)
-                                .clipShape(Capsule())
-                        } else {
-                            Text("未填 Key")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.orange)
-                        }
+                    if !apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("已存 Key")
+                            .font(.caption2.weight(.bold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(FoodLogTheme.morandiProteinSage.opacity(0.18))
+                            .foregroundStyle(FoodLogTheme.morandiProteinSage)
+                            .clipShape(Capsule())
                     }
                 }
-                .swipeActions(edge: .trailing) {
-                    if appState.providers.count > 1 {
-                        Button(role: .destructive) {
-                            appState.deleteProvider(provider)
-                        } label: {
-                            Label("删除", systemImage: "trash")
+                .padding(.vertical, 2)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("API Key (sk-...)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                HStack {
+                    SecureField("粘贴你的 DeepSeek API Key", text: $apiKeyInput)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("settings-api-key-input")
+                    if !apiKeyInput.isEmpty {
+                        Button("保存") {
+                            saveDeepSeekKey()
                         }
+                        .font(.caption.weight(.bold))
+                        .buttonStyle(.borderedProminent)
+                        .tint(FoodLogTheme.deepCharcoalButton)
                     }
                 }
             }
+            .padding(.vertical, 4)
+
+            Picker("模型选择", selection: $selectedModel) {
+                Text("flash（推荐 · 快速识别）").tag("flash")
+                Text("deepseek-chat").tag("deepseek-chat")
+                if !customModelText.isEmpty && customModelText != "flash" && customModelText != "deepseek-chat" {
+                    Text(customModelText).tag(customModelText)
+                }
+            }
+            .onChange(of: selectedModel) { _, newModel in
+                updateDeepSeekModel(newModel)
+            }
+
+            HStack {
+                TextField("或手动输入模型名", text: $customModelText)
+                    .font(.caption)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if !customModelText.isEmpty {
+                    Button("使用") {
+                        let trimmed = customModelText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        selectedModel = trimmed
+                        updateDeepSeekModel(trimmed)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(FoodLogTheme.charcoalText)
+                }
+            }
+
+            DisclosureGroup("高级：接口 Base URL") {
+                TextField("https://api.deepseek.com/v1", text: $baseURLInput)
+                    .font(.caption.monospaced())
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                    .onChange(of: baseURLInput) { _, newURL in
+                        updateDeepSeekBaseURL(newURL)
+                    }
+            }
+            .font(.caption)
 
             Button {
-                isAddingNewProvider = true
-            } label: {
-                Label("新增 AI 供应商", systemImage: "plus.circle.fill")
-                    .font(.subheadline.weight(.semibold))
-            }
-        }
-    }
-
-    private var defaultModelsSection: some View {
-        Section("默认调用模型") {
-            Picker(selection: $appState.defaultVisionProviderID) {
-                ForEach(appState.providers) { provider in
-                    Text("\(provider.name) (\(provider.modelName))").tag(provider.id)
-                }
-            } label: {
-                SettingsIconLabel("拍照识别", systemImage: "camera.fill", color: FoodLogTheme.calorieGreen)
-            }
-
-            Picker(selection: $appState.defaultAnalysisProviderID) {
-                ForEach(appState.providers) { provider in
-                    Text("\(provider.name) (\(provider.modelName))").tag(provider.id)
-                }
-            } label: {
-                SettingsIconLabel("综合分析", systemImage: "wand.and.stars", color: FoodLogTheme.weightPurple)
-            }
-        }
-    }
-
-    private var profileAndGoalsSection: some View {
-        Section("身体参数与每日目标") {
-            Picker("阶段目标", selection: $appState.profile.goalMode) {
-                ForEach(GoalMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-
-            Picker("活动水平", selection: $appState.profile.activityLevel) {
-                ForEach(ActivityLevel.allCases) { level in
-                    Text(level.title).tag(level)
-                }
-            }
-
-            HStack {
-                Text("身高 (cm)")
-                Spacer()
-                TextField("身高", value: $appState.profile.heightCm, format: .number)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 80)
-            }
-
-            HStack {
-                Text("当前 / 目标体重 (kg)")
-                Spacer()
-                TextField("当前", value: $appState.profile.currentWeightKg, format: .number)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 55)
-                Text("→")
-                    .foregroundStyle(.secondary)
-                TextField("目标", value: $appState.profile.targetWeightKg, format: .number)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 55)
-            }
-
-            HStack {
-                Text("目标热量 (kcal)")
-                Spacer()
-                TextField("热量", value: $appState.profile.targetCalories, format: .number)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .font(.subheadline.weight(.bold).monospacedDigit())
-                    .frame(width: 85)
-            }
-
-            HStack {
-                Text("蛋白 / 脂肪 / 碳水 (g)")
-                    .font(.subheadline)
-                Spacer()
-                TextField("P", value: $appState.profile.targetProteinGrams, format: .number)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 46)
-                Text("/")
-                    .foregroundStyle(.secondary)
-                TextField("F", value: $appState.profile.targetFatGrams, format: .number)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 46)
-                Text("/")
-                    .foregroundStyle(.secondary)
-                TextField("C", value: $appState.profile.targetCarbGrams, format: .number)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 50)
-            }
-
-            let recommended = appState.profile.computeRecommendedTargets()
-            Button {
-                appState.profile.applyRecommendedTargets()
-                appState.showTemporaryBanner("已套用推荐目标 \(Int(recommended.targetCalories)) kcal")
+                testDeepSeekConnection()
             } label: {
                 HStack {
-                    Text("套用科学推荐目标")
-                        .font(.caption.weight(.semibold))
-                    Spacer()
-                    Text("\(Int(recommended.targetCalories)) kcal · P \(Int(recommended.targetProteinGrams))g")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    if isTestingConnection {
+                        ProgressView().padding(.trailing, 6)
+                    }
+                    Label("测试 API 连接", systemImage: "bolt.horizontal.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(FoodLogTheme.charcoalText)
                 }
             }
+            .accessibilityIdentifier("settings-test-connection-button")
+            .disabled(isTestingConnection || apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+            if let testStatusMessage {
+                Text(testStatusMessage)
+                    .font(.caption)
+                    .foregroundStyle(testSucceeded ? FoodLogTheme.morandiProteinSage : .red)
+            }
+        } header: {
+            Text("AI 拍照识别配置")
+        } footer: {
+            Text("API Key 仅加密存储于 iPhone 本地 Keychain，绝不上云或打印日志。未配置 Key 时拍照自动平滑回退至本地离线演示。")
+                .font(.caption2)
         }
     }
 
+    // MARK: - 2. 导出与备份
+
     private var exportAndBackupSection: some View {
-        Section("导出与备份") {
+        Section("数据导出与备份") {
             if let foodURL = exportedFoodCSVURL {
                 ShareLink(item: foodURL) {
-                    SettingsIconLabel("导出饮食 CSV (\(allFoodRecords.count) 条)", systemImage: "tablecells.fill", color: FoodLogTheme.calorieGreen)
+                    SettingsIconLabel("导出饮食记录 CSV (\(allFoodRecords.count) 条)", systemImage: "tablecells.fill", color: FoodLogTheme.morandiProteinSage)
                 }
             }
 
             if let weightURL = exportedWeightCSVURL {
                 ShareLink(item: weightURL) {
-                    SettingsIconLabel("导出体重 CSV (\(allWeightRecords.count) 条)", systemImage: "scalemass.fill", color: FoodLogTheme.weightPurple)
+                    SettingsIconLabel("导出体重记录 CSV (\(allWeightRecords.count) 条)", systemImage: "scalemass.fill", color: FoodLogTheme.morandiCarbTerracotta)
                 }
             }
 
-            if let pdfURL = exportedLatestPDFURL {
-                ShareLink(item: pdfURL) {
-                    SettingsIconLabel("导出分析报告 PDF", systemImage: "doc.richtext.fill", color: FoodLogTheme.carbCoral)
-                }
-            }
-
-            Toggle("JSON 备份包含餐食原图", isOn: $includePhotosInBackup)
+            Toggle("备份中包含餐食原图", isOn: $includePhotosInBackup)
+                .font(.subheadline)
                 .onChange(of: includePhotosInBackup) { _, _ in
                     refreshExportFiles()
                 }
@@ -268,9 +224,9 @@ public struct SettingsView: View {
             if let jsonURL = exportedBackupJSONURL {
                 ShareLink(item: jsonURL) {
                     SettingsIconLabel(
-                        includePhotosInBackup ? "导出完整备份 JSON (含照片)" : "导出结构化备份 JSON",
+                        includePhotosInBackup ? "导出完整备份 JSON (含照片)" : "导出完整记录 JSON",
                         systemImage: "externaldrive.fill.badge.checkmark",
-                        color: FoodLogTheme.proteinBlue
+                        color: FoodLogTheme.charcoalText
                     )
                 }
             }
@@ -278,27 +234,93 @@ public struct SettingsView: View {
             Button {
                 isImportingBackup = true
             } label: {
-                SettingsIconLabel("从 JSON 备份恢复数据", systemImage: "arrow.down.doc.fill", color: FoodLogTheme.fatAmber)
+                SettingsIconLabel("从 JSON 备份恢复数据", systemImage: "arrow.down.doc.fill", color: FoodLogTheme.morandiFatAlmond)
             }
 
             if let backupStatusMessage {
                 Text(backupStatusMessage)
                     .font(.caption)
-                    .foregroundStyle(FoodLogTheme.calorieGreen)
+                    .foregroundStyle(FoodLogTheme.morandiProteinSage)
             }
         }
     }
 
+    // MARK: - 3. 关于
+
     private var aboutSection: some View {
         Section {
             HStack {
-                Text("版本")
+                Text("架构")
                 Spacer()
-                Text("1.0.0 · Local-first")
+                Text("Local-first · 本地优先存储")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("local-storage-footer")
             }
+            HStack {
+                Text("版本")
+                Spacer()
+                Text("1.0.0")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Helper Methods
+
+    private func loadDeepSeekConfig() {
+        let config = deepSeekConfig
+        apiKeyInput = appState.apiKey(for: config)
+        baseURLInput = config.baseURL
+        selectedModel = config.modelName
+        customModelText = config.modelName
+    }
+
+    private func saveDeepSeekKey() {
+        var config = deepSeekConfig
+        config.modelName = selectedModel
+        config.baseURL = baseURLInput
+        try? appState.upsertProvider(config, apiKey: apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines))
+        appState.defaultVisionProviderID = config.id
+        appState.defaultAnalysisProviderID = config.id
+        appState.showTemporaryBanner("已保存 DeepSeek API Key")
+    }
+
+    private func updateDeepSeekModel(_ newModel: String) {
+        var config = deepSeekConfig
+        config.modelName = newModel
+        try? appState.upsertProvider(config, apiKey: nil)
+        appState.defaultVisionProviderID = config.id
+        appState.defaultAnalysisProviderID = config.id
+    }
+
+    private func updateDeepSeekBaseURL(_ newURL: String) {
+        var config = deepSeekConfig
+        config.baseURL = newURL
+        try? appState.upsertProvider(config, apiKey: nil)
+    }
+
+    private func testDeepSeekConnection() {
+        isTestingConnection = true
+        testStatusMessage = nil
+        let config = deepSeekConfig
+        let key = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        Task {
+            do {
+                if key.isEmpty {
+                    throw AIServiceError.missingAPIKey(providerName: "DeepSeek")
+                }
+                saveDeepSeekKey()
+                let adapter = AIProviderRouter.adapter(for: .deepSeek)
+                let reply = try await adapter.testConnection(config: config, apiKey: key)
+                testSucceeded = true
+                testStatusMessage = reply
+            } catch {
+                testSucceeded = false
+                testStatusMessage = error.localizedDescription
+            }
+            isTestingConnection = false
         }
     }
 
@@ -333,31 +355,6 @@ public struct SettingsView: View {
                 filename: "FoodLog-Backup-\(appState.selectedDayKey).json"
             )
         }
-
-        let sampleOrLatestReport = reports.first ?? AIComprehensiveReport(
-            spanTitle: "最近 7 天",
-            dateRangeText: appState.selectedDayKey,
-            providerName: appState.defaultAnalysisProvider.name,
-            modelName: appState.defaultAnalysisProvider.modelName,
-            objectiveSummarySection: NutritionAndWeightEngine.buildObjectiveDigest(
-                span: .days7,
-                foodEntries: foods,
-                weightRecords: weights,
-                profile: appState.profile
-            ).promptReadyText,
-            estimationAndFluctuationDisclaimer: "短期体重波动主要受水分和糖原影响。",
-            calorieAndWeightAnalysis: "请前往「AI 分析」标签页生成最新报告。",
-            surplusEvaluation: "按当前目标持续追踪。",
-            underEatingDaysReview: "保持规律记录。",
-            dietStructureIssues: ["坚持记录可获得更精准的趋势洞察"],
-            nextWeekActionSuggestions: ["每日晨起空腹称重，使用拍照或常吃收藏快速记录饮食"],
-            weightGoalAdjustmentAdvice: "每 2 周根据周平均体重斜率微调每日热量目标。"
-        )
-        let pdfData = DataExportService.renderAnalysisReportPDF(report: sampleOrLatestReport)
-        exportedLatestPDFURL = try? DataExportService.writeTemporaryExportFile(
-            data: pdfData,
-            filename: "FoodLog-Analysis-Report.pdf"
-        )
     }
 
     private func handleBackupFileImport(_ result: Result<[URL], Error>) {
@@ -379,150 +376,6 @@ public struct SettingsView: View {
             }
         case .failure(let error):
             backupStatusMessage = "读取失败：\(error.localizedDescription)"
-        }
-    }
-}
-
-public struct AIProviderEditorSheet: View {
-    @EnvironmentObject private var appState: AppStateViewModel
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var draft: AIProviderConfig
-    @State private var apiKeyInput: String = ""
-    @State private var customModelInput: String = ""
-    @State private var isTestingConnection: Bool = false
-    @State private var testStatusMessage: String? = nil
-    @State private var testSucceeded: Bool = false
-    public let isNew: Bool
-
-    public init(provider: AIProviderConfig, isNew: Bool) {
-        _draft = State(initialValue: provider)
-        self.isNew = isNew
-    }
-
-    public var body: some View {
-        NavigationStack {
-            Form {
-                Section("供应商与接口") {
-                    TextField("名称", text: $draft.name)
-
-                    Picker("类型", selection: $draft.kind) {
-                        ForEach(AIProviderKind.allCases) { kind in
-                            Text(kind.displayName).tag(kind)
-                        }
-                    }
-                    .onChange(of: draft.kind) { _, newKind in
-                        draft.baseURL = newKind.defaultBaseURL
-                        if let firstModel = newKind.presetModels.first {
-                            draft.modelName = firstModel
-                        }
-                    }
-
-                    TextField("Base URL", text: $draft.baseURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                }
-
-                if draft.kind.requiresAPIKey {
-                    Section("API Key（存 Keychain）") {
-                        SecureField("sk-... / AIza...", text: $apiKeyInput)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                    }
-                }
-
-                Section("模型选择") {
-                    Picker("预设模型", selection: $draft.modelName) {
-                        ForEach(draft.allSelectableModels, id: \.self) { model in
-                            Text(model).tag(model)
-                        }
-                    }
-
-                    HStack {
-                        TextField("手动输入模型名", text: $customModelInput)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        Button("使用") {
-                            let trimmed = customModelInput.trimmingCharacters(in: .whitespacesAndNewlines)
-                            guard !trimmed.isEmpty else { return }
-                            if !draft.customModels.contains(trimmed) {
-                                draft.customModels.append(trimmed)
-                            }
-                            draft.modelName = trimmed
-                            customModelInput = ""
-                        }
-                        .disabled(customModelInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-
-                    Picker("视觉能力", selection: $draft.supportsVisionOverride) {
-                        Text("自动识别（\(AIVisionCapabilityChecker.supportsVision(kind: draft.kind, modelName: draft.modelName) ? "支持图片" : "仅文本")）")
-                            .tag(Optional<Bool>.none)
-                        Text("支持图片").tag(Optional<Bool>.some(true))
-                        Text("仅文本").tag(Optional<Bool>.some(false))
-                    }
-                }
-
-                Section {
-                    Button {
-                        runConnectionTest()
-                    } label: {
-                        HStack {
-                            if isTestingConnection {
-                                ProgressView().padding(.trailing, 6)
-                            }
-                            Label("测试连接", systemImage: "bolt.horizontal.circle.fill")
-                        }
-                    }
-                    .disabled(isTestingConnection)
-
-                    if let testStatusMessage {
-                        Text(testStatusMessage)
-                            .font(.caption)
-                            .foregroundStyle(testSucceeded ? FoodLogTheme.calorieGreen : .red)
-                    }
-                }
-            }
-            .navigationTitle(isNew ? "添加供应商" : "编辑供应商")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        try? appState.upsertProvider(draft, apiKey: draft.kind.requiresAPIKey ? apiKeyInput : nil)
-                        dismiss()
-                    }
-                    .disabled(draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.modelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            .onAppear {
-                apiKeyInput = appState.apiKey(for: draft)
-            }
-        }
-    }
-
-    private func runConnectionTest() {
-        isTestingConnection = true
-        testStatusMessage = nil
-        let config = draft
-        let keyToTest = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        Task {
-            do {
-                if config.kind.requiresAPIKey && keyToTest.isEmpty {
-                    throw AIServiceError.missingAPIKey(providerName: config.name)
-                }
-                let adapter = AIProviderRouter.adapter(for: config.kind)
-                let message = try await adapter.testConnection(config: config, apiKey: keyToTest)
-                testSucceeded = true
-                testStatusMessage = message
-            } catch {
-                testSucceeded = false
-                testStatusMessage = error.localizedDescription
-            }
-            isTestingConnection = false
         }
     }
 }

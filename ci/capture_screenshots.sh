@@ -64,10 +64,10 @@ capture_screen() {
 
 capture_screen "01-home-dashboard.png" -FoodLogInitialTab dashboard
 cp "$OUT/01-home-dashboard.png" "$OUT/home-${NAME}.png"
-capture_screen "02-ai-photo-sheet.png" -FoodLogInitialTab dashboard -FoodLogOpenPhotoSheet
-capture_screen "03-food-list.png" -FoodLogInitialTab food
-capture_screen "04-weight-chart.png" -FoodLogInitialTab weight
-capture_screen "05-ai-analysis.png" -FoodLogInitialTab analysis
+capture_screen "02-home-calorie-goal-popover.png" -FoodLogInitialTab dashboard -FoodLogOpenGoalEditor
+capture_screen "03-ai-photo-sheet.png" -FoodLogInitialTab dashboard -FoodLogOpenPhotoSheet
+capture_screen "04-history-food-entries.png" -FoodLogInitialTab history -FoodLogHistorySegment food
+capture_screen "05-history-weight-chart.png" -FoodLogInitialTab history -FoodLogHistorySegment weight
 capture_screen "06-settings.png" -FoodLogInitialTab settings
 
 find "$OUT" -name '*.png' -print

@@ -34,7 +34,7 @@ public enum AIProviderKind: String, CaseIterable, Codable, Identifiable, Sendabl
         case .openAI:
             return ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"]
         case .deepSeek:
-            return ["deepseek-chat", "deepseek-reasoner", "deepseek-vl2"]
+            return ["flash", "deepseek-chat", "deepseek-reasoner", "deepseek-vl2"]
         case .gemini:
             return ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"]
         case .openAICompatible:
@@ -101,28 +101,17 @@ public struct AIProviderConfig: Codable, Equatable, Identifiable, Sendable {
     public static func defaultProviders() -> [AIProviderConfig] {
         [
             AIProviderConfig(
+                id: UUID(uuidString: "11111111-2222-3333-4444-555555555503") ?? UUID(),
+                name: "DeepSeek API",
+                kind: .deepSeek,
+                baseURL: "https://api.deepseek.com/v1",
+                modelName: "flash"
+            ),
+            AIProviderConfig(
                 id: UUID(uuidString: "11111111-2222-3333-4444-555555555501") ?? UUID(),
                 name: "内置离线演示 (Mock)",
                 kind: .localMock,
                 modelName: "foodlog-vision-mock-v1"
-            ),
-            AIProviderConfig(
-                id: UUID(uuidString: "11111111-2222-3333-4444-555555555502") ?? UUID(),
-                name: "OpenAI 官方",
-                kind: .openAI,
-                modelName: "gpt-4o-mini"
-            ),
-            AIProviderConfig(
-                id: UUID(uuidString: "11111111-2222-3333-4444-555555555503") ?? UUID(),
-                name: "DeepSeek 官方",
-                kind: .deepSeek,
-                modelName: "deepseek-chat"
-            ),
-            AIProviderConfig(
-                id: UUID(uuidString: "11111111-2222-3333-4444-555555555504") ?? UUID(),
-                name: "Google Gemini",
-                kind: .gemini,
-                modelName: "gemini-2.5-flash"
             )
         ]
     }
@@ -141,20 +130,22 @@ public enum AIVisionCapabilityChecker {
         let lower = modelName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !lower.isEmpty else { return false }
 
+        // flash is the primary vision model requested for DeepSeek
+        if lower.contains("flash") {
+            return true
+        }
+
         // Known text-only models that must never receive image requests
         let textOnlyKeywords = [
-            "deepseek-chat",
             "deepseek-reasoner",
             "deepseek-coder",
             "gpt-3.5",
             "o1-mini",
             "o3-mini",
             "text-only",
-            "qwen-turbo",
-            "qwen-plus",
-            "qwen-max"
+            "qwen-turbo"
         ]
-        if textOnlyKeywords.contains(where: { lower == $0 || lower.contains($0) }) && !lower.contains("vl") {
+        if textOnlyKeywords.contains(where: { lower == $0 || lower.contains($0) }) && !lower.contains("vl") && !lower.contains("flash") {
             return false
         }
 
@@ -166,9 +157,9 @@ public enum AIVisionCapabilityChecker {
         case .openAI:
             return lower.contains("gpt-4o") || lower.contains("gpt-4.1") || lower.contains("gpt-4-turbo") || lower.contains("vision") || lower.contains("gpt-4.5")
         case .deepSeek:
-            return lower.contains("vl") || lower.contains("vision")
+            return lower.contains("flash") || lower.contains("vl") || lower.contains("vision")
         case .openAICompatible:
-            let visionMarkers = ["vl", "vision", "4o", "4.1", "gemini", "claude-3", "pixtral", "llava", "qvq", "4v"]
+            let visionMarkers = ["flash", "vl", "vision", "4o", "4.1", "gemini", "claude-3", "pixtral", "llava", "qvq", "4v"]
             return visionMarkers.contains { lower.contains($0) }
         }
     }

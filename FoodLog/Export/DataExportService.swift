@@ -202,32 +202,36 @@ public enum DataExportService {
     ) throws -> (BackupRestoreSummary, UserProfileSettings) {
         let doc = try decodeBackupDocument(from: data)
 
-        let existingFoodIDs = Set(((try? context.fetch(FetchDescriptor<FoodEntryRecord>())) ?? []).map(\.id))
-        let existingFavIDs = Set(((try? context.fetch(FetchDescriptor<FavoriteFoodTemplate>())) ?? []).map(\.id))
-        let existingWeightIDs = Set(((try? context.fetch(FetchDescriptor<WeightRecord>())) ?? []).map(\.id))
-        let existingReportIDs = Set(((try? context.fetch(FetchDescriptor<SavedAnalysisReportRecord>())) ?? []).map(\.id))
+        var seenFoodIDs = Set(((try? context.fetch(FetchDescriptor<FoodEntryRecord>())) ?? []).map(\.id))
+        var seenFavIDs = Set(((try? context.fetch(FetchDescriptor<FavoriteFoodTemplate>())) ?? []).map(\.id))
+        var seenWeightIDs = Set(((try? context.fetch(FetchDescriptor<WeightRecord>())) ?? []).map(\.id))
+        var seenReportIDs = Set(((try? context.fetch(FetchDescriptor<SavedAnalysisReportRecord>())) ?? []).map(\.id))
 
         var addedFoods = 0
-        for item in doc.foodEntries where !existingFoodIDs.contains(item.id) {
+        for item in doc.foodEntries where !seenFoodIDs.contains(item.id) {
             context.insert(FoodEntryRecord(snapshot: item))
+            seenFoodIDs.insert(item.id)
             addedFoods += 1
         }
 
         var addedFavs = 0
-        for fav in doc.favoriteFoods where !existingFavIDs.contains(fav.id) {
+        for fav in doc.favoriteFoods where !seenFavIDs.contains(fav.id) {
             context.insert(FavoriteFoodTemplate(snapshot: fav))
+            seenFavIDs.insert(fav.id)
             addedFavs += 1
         }
 
         var addedWeights = 0
-        for weight in doc.weightRecords where !existingWeightIDs.contains(weight.id) {
+        for weight in doc.weightRecords where !seenWeightIDs.contains(weight.id) {
             context.insert(WeightRecord(snapshot: weight))
+            seenWeightIDs.insert(weight.id)
             addedWeights += 1
         }
 
         var addedReports = 0
-        for report in doc.savedAnalysisReports where !existingReportIDs.contains(report.id) {
+        for report in doc.savedAnalysisReports where !seenReportIDs.contains(report.id) {
             context.insert(SavedAnalysisReportRecord(report: report))
+            seenReportIDs.insert(report.id)
             addedReports += 1
         }
 

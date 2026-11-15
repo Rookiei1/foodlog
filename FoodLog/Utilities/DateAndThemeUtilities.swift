@@ -63,6 +63,10 @@ public enum DateKeyHelper {
         timeFormatter.string(from: date)
     }
 
+    public static func readableTime(_ date: Date) -> String {
+        timeString(for: date)
+    }
+
     public static func shortDateString(for date: Date) -> String {
         shortDateFormatter.string(from: date)
     }
@@ -94,7 +98,44 @@ public enum DateKeyHelper {
     }
 }
 
+extension Color {
+    public init(hex: UInt32, alpha: Double = 1.0) {
+        let red = Double((hex >> 16) & 0xFF) / 255.0
+        let green = Double((hex >> 8) & 0xFF) / 255.0
+        let blue = Double(hex & 0xFF) / 255.0
+        self.init(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
+    }
+
+    public init(hexString: String, alpha: Double = 1.0) {
+        var cleanHex = hexString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanHex.hasPrefix("#") {
+            cleanHex.removeFirst()
+        }
+        var rgbValue: UInt64 = 0
+        Scanner(string: cleanHex).scanHexInt64(&rgbValue)
+        self.init(hex: UInt32(rgbValue), alpha: alpha)
+    }
+}
+
 public enum FoodLogTheme {
+    // 2026 Warm Morandi Palette Tokens
+    public static let warmBackground = Color(hex: 0xFAF8F5)
+    public static let warmSurface = Color(hex: 0xF7F5F0)
+    public static let charcoalText = Color(hex: 0x1A1A1A)
+    public static let deepCharcoalButton = Color(hex: 0x1C1B1A)
+
+    // 2026 Morandi Macro Tokens
+    public static let morandiProteinSage = Color(hex: 0x8FA89B) // 鼠尾草绿
+    public static let morandiCarbTerracotta = Color(hex: 0xC97A63) // 暖陶土
+    public static let morandiFatAlmond = Color(hex: 0xD2B48C) // 杏仁燕麦
+
+    // Horizon Energy Arc Styling Tokens
+    public static let arcTrackColor = Color(hex: 0x1A1A1A).opacity(0.08)
+    public static let arcGlowColor = Color(hex: 0x8FA89B).opacity(0.25)
+    public static let arcGradientStart = Color(hex: 0x8FA89B)
+    public static let arcGradientEnd = Color(hex: 0xC97A63)
+
+    // Legacy and Complementary Tokens
     public static let calorieGreen = Color(red: 0.13, green: 0.72, blue: 0.44)
     public static let proteinBlue = Color(red: 0.20, green: 0.54, blue: 0.96)
     public static let fatAmber = Color(red: 0.96, green: 0.62, blue: 0.16)
@@ -109,6 +150,68 @@ public enum FoodLogTheme {
         case .lateNight: return Color(red: 0.62, green: 0.38, blue: 0.92)
         case .snack: return Color(red: 0.92, green: 0.38, blue: 0.52)
         }
+    }
+}
+
+public struct HorizonEnergyArc: Shape {
+    public var startAngle: Angle
+    public var endAngle: Angle
+
+    public init(startAngle: Angle = .degrees(195), endAngle: Angle = .degrees(345)) {
+        self.startAngle = startAngle
+        self.endAngle = endAngle
+    }
+
+    public func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.height * 0.92)
+        let radius = min(rect.width * 0.48, rect.height * 1.35)
+        path.addArc(
+            center: center,
+            radius: radius,
+            startAngle: startAngle,
+            endAngle: endAngle,
+            clockwise: false
+        )
+        return path
+    }
+}
+
+public struct MorandiMacroCapsule: View {
+    public let title: String
+    public let currentGrams: Double
+    public let targetGrams: Double
+    public let tintColor: Color
+
+    public init(title: String, currentGrams: Double, targetGrams: Double = 0, tintColor: Color) {
+        self.title = title
+        self.currentGrams = currentGrams
+        self.targetGrams = targetGrams
+        self.tintColor = tintColor
+    }
+
+    public var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(tintColor)
+                .frame(width: 7, height: 7)
+            Text(title)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(FoodLogTheme.charcoalText)
+            Text("\(Int(currentGrams.rounded()))g")
+                .font(.system(size: 11, weight: .medium, design: .rounded).monospacedDigit())
+                .foregroundStyle(FoodLogTheme.charcoalText.opacity(0.72))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule()
+                .fill(tintColor.opacity(0.16))
+        )
+        .overlay(
+            Capsule()
+                .stroke(tintColor.opacity(0.35), lineWidth: 0.8)
+        )
     }
 }
 

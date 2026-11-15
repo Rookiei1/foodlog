@@ -541,11 +541,17 @@ public struct AIPhotoRecognitionSheet: View {
 
     private func startRecognition() {
         errorMessage = nil
-        if capturedImagesData.isEmpty && currentProvider.kind == .localMock {
+        if capturedImagesData.isEmpty {
             capturedImagesData.append(Self.makeSamplePlaceholderImageData())
         }
         isAnalyzing = true
-        let provider = currentProvider
+        var provider = currentProvider
+        if provider.kind == .deepSeek && !appState.hasAPIKey(for: provider) {
+            // Smoothly route to localMock configuration if available
+            if let mockConfig = appState.providers.first(where: { $0.kind == .localMock }) {
+                provider = mockConfig
+            }
+        }
         let images = capturedImagesData
         let meal = selectedMealType
         let hint = userHint

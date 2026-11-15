@@ -16,6 +16,7 @@ public struct DashboardView: View {
     private var allWeightRecords: [WeightRecord]
 
     @State private var showingCalendarPopover: Bool = false
+    @State private var showingDailyGoalEditor: Bool = false
 
     public init() {}
 
@@ -28,14 +29,12 @@ public struct DashboardView: View {
         )
     }
 
-    private var recentWeightTrend: WeightTrendSummary {
-        let snapshots = allWeightRecords.map(\.snapshot)
-        let start = DateKeyHelper.shiftingDays(appState.selectedDate, by: -13)
-        return NutritionAndWeightEngine.buildWeightTrend(
-            records: snapshots,
-            rule: appState.profile.representativeWeightRule,
-            startDate: start,
-            endDate: appState.selectedDate
+    private var todayRepresentativeWeight: Double? {
+        let dayKey = appState.selectedDayKey
+        let daySnapshots = allWeightRecords.filter { $0.dayKey == dayKey }.map(\.snapshot)
+        return NutritionAndWeightEngine.selectDailyRepresentativeWeight(
+            from: daySnapshots,
+            rule: appState.profile.representativeWeightRule
         )
     }
 
@@ -44,18 +43,18 @@ public struct DashboardView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     topDateHeaderBar
-                    heroNutritionCard(metrics: dailyMetrics)
+                    heroMagazineNutritionCard(metrics: dailyMetrics)
                     if !favoriteTemplates.isEmpty {
                         quickFavoritesStrip
                     }
-                    mealsSection(metrics: dailyMetrics)
-                    compactWeightWidget(trend: recentWeightTrend)
+                    foodJournalSection(metrics: dailyMetrics)
+                    zenWeightCard
                     Spacer(minLength: 24)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(FoodLogTheme.warmBackground.ignoresSafeArea())
             .navigationTitle("食刻")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -64,7 +63,8 @@ public struct DashboardView: View {
                         Button("回今天") {
                             appState.jumpToToday()
                         }
-                        .font(.subheadline.weight(.semibold))
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(FoodLogTheme.charcoalText)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -73,6 +73,7 @@ public struct DashboardView: View {
                     } label: {
                         Image(systemName: "calendar")
                             .font(.body.weight(.semibold))
+                            .foregroundStyle(FoodLogTheme.charcoalText)
                     }
                     .popover(isPresented: $showingCalendarPopover) {
                         VStack(spacing: 12) {
@@ -89,26 +90,44 @@ public struct DashboardView: View {
                                 showingCalendarPopover = false
                             }
                             .buttonStyle(.borderedProminent)
+                            .tint(FoodLogTheme.deepCharcoalButton)
                             .padding(.bottom, 12)
                         }
                         .presentationDetents([.medium])
                     }
                 }
             }
+            .sheet(isPresented: $showingDailyGoalEditor) {
+                DailyGoalAndProfileEditorSheet()
+                    .environmentObject(appState)
+            }
         }
     }
 
-    // MARK: - Top Date Bar
+    // MARK: - 1. Clickable Top Date & Calorie Goal Bar (R2)
 
     private var topDateHeaderBar: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(DateKeyHelper.readableChineseDate(appState.selectedDate))
-                    .font(.title3.weight(.bold))
-                Text("\(appState.profile.goalMode.title) · 目标 \(Int(appState.profile.targetCalories)) kcal")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Button {
+                showingDailyGoalEditor = true
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(DateKeyHelper.readableChineseDate(appState.selectedDate))
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundStyle(FoodLogTheme.charcoalText)
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(FoodLogTheme.morandiCarbTerracotta)
+                    }
+
+                    Text("\(appState.profile.goalMode.title) · 目标 \(Int(appState.profile.targetCalories)) kcal · 点击调整")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("dashboard-date-goal-header-button")
 
             Spacer()
 
@@ -118,8 +137,9 @@ public struct DashboardView: View {
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.subheadline.weight(.bold))
+                        .foregroundStyle(FoodLogTheme.charcoalText)
                         .frame(width: 32, height: 32)
-                        .background(Circle().fill(Color(.secondarySystemGroupedBackground)))
+                        .background(Circle().fill(Color.white.opacity(0.85)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("前一天")
@@ -129,8 +149,9 @@ public struct DashboardView: View {
                 } label: {
                     Image(systemName: "chevron.right")
                         .font(.subheadline.weight(.bold))
+                        .foregroundStyle(FoodLogTheme.charcoalText)
                         .frame(width: 32, height: 32)
-                        .background(Circle().fill(Color(.secondarySystemGroupedBackground)))
+                        .background(Circle().fill(Color.white.opacity(0.85)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("后一天")
@@ -138,118 +159,120 @@ public struct DashboardView: View {
         }
     }
 
-    // MARK: - Hero Card
+    // MARK: - 2. 2026 Magazine Hero Card & Horizon Energy Arc (R2)
 
-    private func heroNutritionCard(metrics: DailyNutritionMetrics) -> some View {
-        VStack(spacing: 18) {
-            HStack(alignment: .center, spacing: 20) {
-                ZStack {
-                    Circle()
-                        .stroke(FoodLogTheme.calorieGreen.opacity(0.14), lineWidth: 14)
-                    Circle()
-                        .trim(from: 0, to: min(1.0, metrics.calorieProgress))
-                        .stroke(
-                            AngularGradient(
-                                colors: [FoodLogTheme.calorieGreen, Color.mint, FoodLogTheme.calorieGreen],
-                                center: .center
-                            ),
-                            style: StrokeStyle(lineWidth: 14, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .animation(.spring(response: 0.45, dampingFraction: 0.82), value: metrics.totalCalories)
+    private func heroMagazineNutritionCard(metrics: DailyNutritionMetrics) -> some View {
+        VStack(spacing: 16) {
+            // Magazine Typography & Horizon Arc
+            VStack(spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(Int(metrics.totalCalories.rounded()))")
+                        .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(FoodLogTheme.charcoalText)
+                        .accessibilityIdentifier("today-calories-value")
 
-                    VStack(spacing: 1) {
-                        Text("\(Int(metrics.totalCalories.rounded()))")
-                            .font(.system(size: 29, weight: .bold, design: .rounded))
-                            .minimumScaleFactor(0.7)
-                            .accessibilityIdentifier("today-calories-value")
-                        Text("已摄入 kcal")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(10)
-                }
-                .frame(width: 118, height: 118)
+                    Text("kcal")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
 
-                VStack(alignment: .leading, spacing: 10) {
+                    Spacer()
+
                     let diff = metrics.remainingCalories
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(diff > 0 ? "距离目标还差" : "已超出目标")
-                            .font(.caption)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(diff >= 0 ? "还需摄入" : "已超出")
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(Int(abs(diff).rounded()))")
-                                .font(.system(size: 30, weight: .bold, design: .rounded))
-                                .foregroundStyle(diff > 0 ? .primary : FoodLogTheme.calorieGreen)
-                            Text("kcal")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        Label(
-                            "\(Int((metrics.calorieProgress * 100).rounded()))%",
-                            systemImage: diff <= 0 ? "checkmark.seal.fill" : "flame.fill"
-                        )
-                        .font(.caption.weight(.bold))
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(FoodLogTheme.calorieGreen.opacity(0.14))
-                        .foregroundStyle(FoodLogTheme.calorieGreen)
-                        .clipShape(Capsule())
-
-                        Text("目标 \(Int(metrics.targetCalories.rounded()))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Text("\(Int(abs(diff).rounded())) kcal")
+                            .font(.system(size: 15, weight: .bold, design: .rounded).monospacedDigit())
+                            .foregroundStyle(diff >= 0 ? FoodLogTheme.morandiProteinSage : FoodLogTheme.morandiCarbTerracotta)
                     }
                 }
-                Spacer(minLength: 0)
+
+                // Horizon Energy Arc
+                ZStack {
+                    // Background track
+                    HorizonEnergyArc()
+                        .stroke(
+                            FoodLogTheme.arcTrackColor,
+                            style: StrokeStyle(lineWidth: 9, lineCap: .round)
+                        )
+
+                    // Active progress arc with gradient
+                    HorizonEnergyArc()
+                        .trim(from: 0, to: min(1.0, max(0.01, metrics.calorieProgress)))
+                        .stroke(
+                            LinearGradient(
+                                colors: [FoodLogTheme.arcGradientStart, FoodLogTheme.arcGradientEnd],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            style: StrokeStyle(lineWidth: 9, lineCap: .round)
+                        )
+                        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: metrics.totalCalories)
+
+                    // Progress percentage badge
+                    VStack(spacing: 2) {
+                        Text("今日目标 \(Int(metrics.targetCalories.rounded())) kcal")
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                        Text("\(Int((metrics.calorieProgress * 100).rounded()))%")
+                            .font(.system(size: 13, weight: .bold, design: .rounded).monospacedDigit())
+                            .foregroundStyle(FoodLogTheme.charcoalText)
+                    }
+                    .offset(y: 4)
+                }
+                .frame(height: 64)
+                .padding(.top, 4)
             }
 
-            HStack(spacing: 10) {
-                macroStatBox(
+            // Three Centered Morandi Micro Capsules (Protein, Carbs, Fat)
+            HStack(spacing: 8) {
+                MorandiMacroCapsule(
                     title: "蛋白质",
-                    current: metrics.totalProteinGrams,
-                    target: metrics.targetProteinGrams,
-                    color: FoodLogTheme.proteinBlue
+                    currentGrams: metrics.totalProteinGrams,
+                    targetGrams: metrics.targetProteinGrams,
+                    tintColor: FoodLogTheme.morandiProteinSage
                 )
-                macroStatBox(
-                    title: "脂肪",
-                    current: metrics.totalFatGrams,
-                    target: metrics.targetFatGrams,
-                    color: FoodLogTheme.fatAmber
-                )
-                macroStatBox(
+                MorandiMacroCapsule(
                     title: "碳水",
-                    current: metrics.totalCarbGrams,
-                    target: metrics.targetCarbGrams,
-                    color: FoodLogTheme.carbCoral
+                    currentGrams: metrics.totalCarbGrams,
+                    targetGrams: metrics.targetCarbGrams,
+                    tintColor: FoodLogTheme.morandiCarbTerracotta
+                )
+                MorandiMacroCapsule(
+                    title: "脂肪",
+                    currentGrams: metrics.totalFatGrams,
+                    targetGrams: metrics.targetFatGrams,
+                    tintColor: FoodLogTheme.morandiFatAlmond
                 )
             }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, 4)
 
+            // Primary Floating Action Lens Pill Button + Manual Add Companion
             HStack(spacing: 10) {
                 Button {
                     appState.openPhotoRecognitionSheet()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "camera.viewfinder")
-                            .font(.headline.weight(.bold))
-                        Text("AI 拍照记餐")
-                            .font(.subheadline.weight(.bold))
+                            .font(.system(size: 15, weight: .bold))
+                        Text("⊙ AI 拍摄餐食")
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                        Text("DeepSeek")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.white.opacity(0.18))
+                            .clipShape(Capsule())
                     }
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 13)
                     .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [FoodLogTheme.calorieGreen, Color(red: 0.09, green: 0.58, blue: 0.36)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                            .fill(FoodLogTheme.deepCharcoalButton)
+                            .shadow(color: FoodLogTheme.deepCharcoalButton.opacity(0.25), radius: 6, x: 0, y: 3)
                     )
                 }
                 .buttonStyle(.plain)
@@ -258,109 +281,99 @@ public struct DashboardView: View {
                 Button {
                     appState.openNewFoodSheet()
                 } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.subheadline.weight(.bold))
-                        Text("手动 / 营养表")
-                            .font(.subheadline.weight(.semibold))
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .bold))
+                        Text("手动添加")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
                     }
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 16)
+                    .foregroundStyle(FoodLogTheme.charcoalText)
+                    .padding(.horizontal, 14)
                     .padding(.vertical, 13)
                     .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color(.tertiarySystemGroupedBackground))
+                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                            .fill(Color.white)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                    .stroke(Color.black.opacity(0.1), lineWidth: 0.8)
+                            )
                     )
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("dashboard-manual-add-button")
             }
+            .padding(.top, 6)
         }
         .padding(18)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.04), radius: 10, x: 0, y: 3)
         )
     }
 
-    private func macroStatBox(title: String, current: Double, target: Double, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(color)
-                    .frame(width: 7, height: 7)
-                Text(title)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text("\(Int(current.rounded()))")
-                    .font(.system(size: 16, weight: .bold, design: .rounded).monospacedDigit())
-                Text("/\(Int(target.rounded()))g")
-                    .font(.system(size: 11, design: .rounded).monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(color.opacity(0.16))
-                    Capsule()
-                        .fill(color)
-                        .frame(width: geo.size.width * min(1.0, max(0.0, target > 0 ? current / target : 0)))
-                }
-            }
-            .frame(height: 5)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(Color(.tertiarySystemGroupedBackground))
-        )
-    }
-
-    // MARK: - Quick Favorites
+    // MARK: - 3. Quick Favorites Strip
 
     private var quickFavoritesStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(favoriteTemplates.prefix(8)) { fav in
-                    Button {
-                        quickLogFavorite(fav)
-                    } label: {
-                        let kcal = Int((fav.caloriesPer100g * fav.defaultGrams / 100.0).rounded())
-                        HStack(spacing: 6) {
-                            Image(systemName: "bolt.fill")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(FoodLogTheme.calorieGreen)
-                            Text(fav.name)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            Text("+\(kcal)")
-                                .font(.caption2.weight(.bold).monospacedDigit())
-                                .foregroundStyle(FoodLogTheme.calorieGreen)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("常吃快速记录")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(favoriteTemplates.prefix(6)) { fav in
+                        Button {
+                            quickLogFavorite(fav)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(FoodLogTheme.morandiProteinSage)
+                                Text(fav.name)
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .foregroundStyle(FoodLogTheme.charcoalText)
+                                Text("\(Int(fav.caloriesPer100g * (fav.defaultGrams / 100.0))) kcal")
+                                    .font(.system(size: 11, weight: .regular, design: .rounded).monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color.black.opacity(0.08), lineWidth: 0.8)
+                                    )
+                            )
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule()
-                                .fill(Color(.secondarySystemGroupedBackground))
-                        )
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
     }
 
-    // MARK: - Meals Section (Logged Cards + Compact Unlogged Strip)
+    // MARK: - 4. Food Journal Section (R2)
 
-    private func mealsSection(metrics: DailyNutritionMetrics) -> some View {
+    private func foodJournalSection(metrics: DailyNutritionMetrics) -> some View {
         let loggedMeals = MealType.allCases.filter { !(metrics.entriesByMeal[$0] ?? []).isEmpty }
         let unloggedMeals = MealType.allCases.filter { (metrics.entriesByMeal[$0] ?? []).isEmpty }
 
-        return VStack(spacing: 12) {
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("今日餐次流 · Food Journal")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(FoodLogTheme.charcoalText)
+                Spacer()
+                Text("\(metrics.totalCount) 项")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 4)
+
             ForEach(loggedMeals) { meal in
                 let mealItems = metrics.entriesByMeal[meal] ?? []
                 let mealCalories = metrics.calories(for: meal)
@@ -369,8 +382,8 @@ public struct DashboardView: View {
 
             if !unloggedMeals.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(loggedMeals.isEmpty ? "点击餐次开始记录" : "待记录餐次")
-                        .font(.caption.weight(.semibold))
+                    Text(loggedMeals.isEmpty ? "点击餐次开始记录今日饮食" : "待记录餐次")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                         .padding(.leading, 4)
 
@@ -388,33 +401,37 @@ public struct DashboardView: View {
                                     Label("手动添加\(meal.title)", systemImage: "square.and.pencil")
                                 }
                             } label: {
-                                HStack(spacing: 10) {
+                                HStack(spacing: 8) {
                                     Circle()
-                                        .fill(FoodLogTheme.mealColor(for: meal).opacity(0.15))
-                                        .frame(width: 34, height: 34)
+                                        .fill(FoodLogTheme.mealColor(for: meal).opacity(0.14))
+                                        .frame(width: 32, height: 32)
                                         .overlay(
                                             Image(systemName: meal.systemImage)
-                                                .font(.system(size: 15, weight: .semibold))
+                                                .font(.system(size: 13, weight: .semibold))
                                                 .foregroundStyle(FoodLogTheme.mealColor(for: meal))
                                         )
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(meal.title)
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(.primary)
+                                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                            .foregroundStyle(FoodLogTheme.charcoalText)
                                         Text("点击记录")
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.body)
-                                        .foregroundStyle(.tertiary)
+                                    Image(systemName: "plus")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(FoodLogTheme.charcoalText.opacity(0.5))
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 10)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(Color(.secondarySystemGroupedBackground))
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(Color.white)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                .stroke(Color.black.opacity(0.06), lineWidth: 0.8)
+                                        )
                                 )
                             }
                             .buttonStyle(.plain)
@@ -428,31 +445,32 @@ public struct DashboardView: View {
     private func loggedMealCard(meal: MealType, items: [FoodEntrySnapshot], totalCalories: Double) -> some View {
         let mealTint = FoodLogTheme.mealColor(for: meal)
 
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
                 Circle()
                     .fill(mealTint.opacity(0.16))
-                    .frame(width: 32, height: 32)
+                    .frame(width: 30, height: 30)
                     .overlay(
                         Image(systemName: meal.systemImage)
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(mealTint)
                     )
 
                 Text(meal.title)
-                    .font(.headline)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(FoodLogTheme.charcoalText)
 
                 Spacer()
 
                 Text("\(Int(totalCalories.rounded())) kcal")
-                    .font(.subheadline.weight(.bold).monospacedDigit())
+                    .font(.system(size: 14, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(mealTint)
 
                 Menu {
                     Button {
                         appState.openPhotoRecognitionSheet(for: meal)
                     } label: {
-                        Label("AI 拍照添加", systemImage: "camera.fill")
+                        Label("AI 拍照加餐", systemImage: "camera.fill")
                     }
                     Button {
                         appState.openNewFoodSheet(for: meal)
@@ -461,192 +479,128 @@ public struct DashboardView: View {
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 18))
+                        .foregroundStyle(mealTint.opacity(0.85))
                 }
             }
 
-            Divider()
-
-            VStack(spacing: 10) {
+            VStack(spacing: 6) {
                 ForEach(items) { item in
-                    Button {
-                        appState.openEditFoodSheet(item)
-                    } label: {
-                        HStack(spacing: 12) {
-                            FoodThumbnailBadge(
-                                photoFilename: item.photoFilenames.first,
-                                mealType: item.mealType,
-                                size: 44
-                            )
+                    HStack(spacing: 8) {
+                        FoodThumbnailBadge(photoFilename: item.photoFilenames.first, mealType: item.mealType, size: 36)
 
-                            VStack(alignment: .leading, spacing: 5) {
-                                HStack(spacing: 6) {
-                                    Text(item.name)
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                    if item.isFromNutritionLabel {
-                                        Text("营养表")
-                                            .font(.system(size: 9, weight: .bold))
-                                            .padding(.horizontal, 5)
-                                            .padding(.vertical, 2)
-                                            .background(Color.blue.opacity(0.14))
-                                            .foregroundStyle(.blue)
-                                            .clipShape(Capsule())
-                                    }
-                                }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name)
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(FoodLogTheme.charcoalText)
+                                .lineLimit(1)
+                            Text("\(Int(item.grams))g" + (item.userNote.isEmpty ? "" : " · \(item.userNote)"))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
 
-                                HStack(spacing: 5) {
-                                    Text("\(Int(item.grams))g")
-                                        .font(.caption2.weight(.medium).monospacedDigit())
-                                        .foregroundStyle(.secondary)
-                                    MacroTagPill(prefix: "P", grams: item.proteinGrams, color: FoodLogTheme.proteinBlue)
-                                    MacroTagPill(prefix: "F", grams: item.fatGrams, color: FoodLogTheme.fatAmber)
-                                    MacroTagPill(prefix: "C", grams: item.carbGrams, color: FoodLogTheme.carbCoral)
-                                }
-                            }
+                        Spacer()
 
-                            Spacer(minLength: 4)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("\(Int(item.calories.rounded())) kcal")
+                                .font(.system(size: 13, weight: .semibold, design: .rounded).monospacedDigit())
+                                .foregroundStyle(FoodLogTheme.charcoalText)
 
-                            VStack(alignment: .trailing, spacing: 1) {
-                                Text("\(Int(item.calories.rounded()))")
-                                    .font(.system(size: 17, weight: .bold, design: .rounded).monospacedDigit())
-                                    .foregroundStyle(.primary)
-                                Text("kcal")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.secondary)
+                            HStack(spacing: 3) {
+                                Text("蛋\(Int(item.proteinGrams))")
+                                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                                    .foregroundStyle(FoodLogTheme.morandiProteinSage)
+                                Text("碳\(Int(item.carbGrams))")
+                                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                                    .foregroundStyle(FoodLogTheme.morandiCarbTerracotta)
+                                Text("脂\(Int(item.fatGrams))")
+                                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                                    .foregroundStyle(FoodLogTheme.morandiFatAlmond)
                             }
                         }
                     }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button {
-                            duplicateEntry(item)
-                        } label: {
-                            Label("复制一条", systemImage: "doc.on.doc")
-                        }
-                        Button(role: .destructive) {
-                            deleteEntry(id: item.id)
-                        } label: {
-                            Label("删除记录", systemImage: "trash")
-                        }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        appState.openEditFoodSheet(item)
                     }
                 }
             }
         }
-        .padding(16)
+        .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
         )
     }
 
-    // MARK: - Compact Weight Widget
+    // MARK: - 5. Zen Optional Weight Card (R2)
 
-    private func compactWeightWidget(trend: WeightTrendSummary) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(FoodLogTheme.weightPurple.opacity(0.16))
-                        .frame(width: 30, height: 30)
-                        .overlay(
-                            Image(systemName: "scalemass.fill")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(FoodLogTheme.weightPurple)
-                        )
-                    Text("体重趋势")
-                        .font(.headline)
-                }
-                Spacer()
-                Button {
-                    appState.openNewWeightSheet()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.caption.weight(.bold))
-                        Text("记体重")
-                            .font(.caption.weight(.bold))
+    private var zenWeightCard: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Circle()
+                .fill(FoodLogTheme.morandiProteinSage.opacity(0.16))
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Image(systemName: "scalemass.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(FoodLogTheme.morandiProteinSage)
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("今日体重 · 顺其自然 (可选)")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                if let weight = todayRepresentativeWeight {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(String(format: "%.2f", weight))
+                            .font(.system(size: 22, weight: .bold, design: .rounded).monospacedDigit())
+                            .foregroundStyle(FoodLogTheme.charcoalText)
+                        Text("kg · 已记录")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(FoodLogTheme.morandiProteinSage)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(FoodLogTheme.weightPurple.opacity(0.14))
-                    .foregroundStyle(FoodLogTheme.weightPurple)
-                    .clipShape(Capsule())
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("未称重")
+                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .foregroundStyle(FoodLogTheme.charcoalText.opacity(0.75))
+                        Text("顺其自然，健康由每一餐开始")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                .buttonStyle(.plain)
             }
 
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    if let latest = trend.latestWeightKg {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(String(format: "%.2f", latest))
-                                .font(.system(size: 26, weight: .bold, design: .rounded).monospacedDigit())
-                            Text("kg")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        Text("暂未记录")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                    }
+            Spacer()
 
-                    HStack(spacing: 8) {
-                        if let rate = trend.weeklyRateKg {
-                            Text(String(format: "%+.2f kg/周", rate))
-                                .font(.caption2.weight(.bold).monospacedDigit())
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(FoodLogTheme.weightPurple.opacity(0.14))
-                                .foregroundStyle(FoodLogTheme.weightPurple)
-                                .clipShape(Capsule())
-                        }
-                        Text("目标 \(String(format: "%.1f", appState.profile.targetWeightKg)) kg")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer()
-
-                if trend.dailyPoints.count >= 2 {
-                    Chart(trend.dailyPoints) { pt in
-                        AreaMark(
-                            x: .value("日期", pt.date),
-                            yStart: .value("底", (trend.minWeightKg ?? pt.weightKg) - 0.3),
-                            yEnd: .value("体重", pt.weightKg)
-                        )
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [FoodLogTheme.weightPurple.opacity(0.28), .clear],
-                                startPoint: .top,
-                                endPoint: .bottom
+            Button {
+                appState.openNewWeightSheet()
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(FoodLogTheme.charcoalText)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle()
+                            .fill(FoodLogTheme.warmSurface)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.black.opacity(0.08), lineWidth: 0.8)
                             )
-                        )
-                        .interpolationMethod(.catmullRom)
-
-                        LineMark(
-                            x: .value("日期", pt.date),
-                            y: .value("体重", pt.weightKg)
-                        )
-                        .foregroundStyle(FoodLogTheme.weightPurple)
-                        .lineStyle(StrokeStyle(lineWidth: 2.2))
-                        .interpolationMethod(.catmullRom)
-                    }
-                    .chartXAxis(.hidden)
-                    .chartYAxis(.hidden)
-                    .chartYScale(domain: .automatic(includesZero: false))
-                    .frame(width: 130, height: 56)
-                }
+                    )
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("dashboard-zen-weight-add-button")
         }
-        .padding(16)
+        .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
         )
     }
 
@@ -661,20 +615,5 @@ public struct DashboardView: View {
         fav.lastUsedAt = Date()
         try? modelContext.save()
         appState.showTemporaryBanner("已记「\(fav.name)」+\(Int(snapshot.calories.rounded())) kcal")
-    }
-
-    private func duplicateEntry(_ item: FoodEntrySnapshot) {
-        let copy = item.duplicated(for: appState.selectedDate)
-        modelContext.insert(FoodEntryRecord(snapshot: copy))
-        try? modelContext.save()
-        appState.showTemporaryBanner("已复制「\(item.name)」")
-    }
-
-    private func deleteEntry(id: UUID) {
-        if let record = allFoodRecords.first(where: { $0.id == id }) {
-            ImageStorageService.shared.deletePhotos(filenames: record.photoFilenames)
-            modelContext.delete(record)
-            try? modelContext.save()
-        }
     }
 }

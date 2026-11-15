@@ -3,10 +3,10 @@ import XCTest
 
 final class AIProviderAndValidationTests: XCTestCase {
     func testVisionCapabilityCheckerBlocksTextOnlyModels() {
-        XCTAssertFalse(AIVisionCapabilityChecker.supportsVision(kind: .deepSeek, modelName: "deepseek-chat"))
         XCTAssertFalse(AIVisionCapabilityChecker.supportsVision(kind: .deepSeek, modelName: "deepseek-reasoner"))
         XCTAssertFalse(AIVisionCapabilityChecker.supportsVision(kind: .openAI, modelName: "o3-mini"))
 
+        XCTAssertTrue(AIVisionCapabilityChecker.supportsVision(kind: .deepSeek, modelName: "flash"))
         XCTAssertTrue(AIVisionCapabilityChecker.supportsVision(kind: .openAI, modelName: "gpt-4o"))
         XCTAssertTrue(AIVisionCapabilityChecker.supportsVision(kind: .openAI, modelName: "gpt-4o-mini"))
         XCTAssertTrue(AIVisionCapabilityChecker.supportsVision(kind: .gemini, modelName: "gemini-2.5-flash"))
@@ -22,9 +22,9 @@ final class AIProviderAndValidationTests: XCTestCase {
 
     func testRouterRejectsImageRecognitionOnNonVisionModelBeforeNetwork() async {
         let nonVisionConfig = AIProviderConfig(
-            name: "DeepSeek 文本",
+            name: "DeepSeek 思考纯文本",
             kind: .deepSeek,
-            modelName: "deepseek-chat"
+            modelName: "deepseek-reasoner"
         )
         let keychain = InMemoryKeychainStore()
         try? keychain.saveSecret("sk-test-123", forAccount: nonVisionConfig.id.uuidString)
@@ -39,7 +39,7 @@ final class AIProviderAndValidationTests: XCTestCase {
             )
             XCTFail("Expected non-vision model to be rejected before network call")
         } catch let error as AIServiceError {
-            XCTAssertEqual(error, .modelDoesNotSupportVision(modelName: "deepseek-chat"))
+            XCTAssertEqual(error, .modelDoesNotSupportVision(modelName: "deepseek-reasoner"))
         } catch {
             XCTFail("Unexpected error type: \(error)")
         }
@@ -127,15 +127,15 @@ final class AIProviderAndValidationTests: XCTestCase {
 
         let keychain = InMemoryKeychainStore()
         let vm = AppStateViewModel(userDefaults: defaults, keychain: keychain)
-        let openAI = vm.providers.first(where: { $0.kind == .openAI })!
+        let deepSeek = vm.providers.first(where: { $0.kind == .deepSeek })!
 
-        XCTAssertFalse(vm.hasAPIKey(for: openAI))
-        try vm.saveAPIKey("sk-secret-key-do-not-export", for: openAI)
-        XCTAssertTrue(vm.hasAPIKey(for: openAI))
-        XCTAssertEqual(vm.apiKey(for: openAI), "sk-secret-key-do-not-export")
+        XCTAssertFalse(vm.hasAPIKey(for: deepSeek))
+        try vm.saveAPIKey("sk-secret-key-do-not-export", for: deepSeek)
+        XCTAssertTrue(vm.hasAPIKey(for: deepSeek))
+        XCTAssertEqual(vm.apiKey(for: deepSeek), "sk-secret-key-do-not-export")
 
         // Switching default provider preserves settings
-        vm.defaultVisionProviderID = openAI.id
-        XCTAssertEqual(vm.defaultVisionProvider.id, openAI.id)
+        vm.defaultVisionProviderID = deepSeek.id
+        XCTAssertEqual(vm.defaultVisionProvider.id, deepSeek.id)
     }
 }

@@ -30,6 +30,13 @@ public struct FoodLogApp: App {
             initialState.profile.hasAcceptedPhotoPrivacyNotice = true
             initialState.isPresentingPhotoRecognitionSheet = true
         }
+        if args.contains("-FoodLogOpenGoalEditor") {
+            initialState.isPresentingDailyGoalEditor = true
+        }
+        if let segIdx = args.firstIndex(of: "-FoodLogHistorySegment"),
+           segIdx + 1 < args.count {
+            initialState.historySegment = args[segIdx + 1]
+        }
         _appState = StateObject(wrappedValue: initialState)
     }
 
