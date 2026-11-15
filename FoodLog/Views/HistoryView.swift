@@ -441,17 +441,15 @@ public struct HistoryView: View {
                         }
                         .chartYScale(domain: weightYScaleDomain)
                         .chartXAxis {
-                            AxisMarks(values: .automatic(desiredCount: 5)) { _ in
-                                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                                AxisValueLabel(format: .dateTime.month().day(), centered: true)
-                                    .font(.caption2)
+                            AxisMarks { _ in
+                                AxisGridLine()
+                                AxisValueLabel(format: .dateTime.month().day())
                             }
                         }
                         .chartYAxis {
                             AxisMarks(position: .leading) { _ in
-                                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                                AxisGridLine()
                                 AxisValueLabel()
-                                    .font(.caption2)
                             }
                         }
                         .frame(height: 190)
