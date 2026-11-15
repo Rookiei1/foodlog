@@ -70,6 +70,7 @@ jobs:
           python3 ci/test_release_plists.py
 
       - name: Generate the Xcode project
+        if: inputs.action == 'release'
         shell: bash
         run: |
           set -euo pipefail
@@ -77,6 +78,7 @@ jobs:
           xcodegen generate
 
       - name: Run unit tests
+        if: inputs.action == 'release'
         timeout-minutes: 25
         shell: bash
         run: |

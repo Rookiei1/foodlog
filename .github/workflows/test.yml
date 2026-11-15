@@ -3,6 +3,10 @@ name: Test
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - ".github/workflows/testflight.yml"
+      - "README.md"
+      - "RELEASE.md"
   workflow_dispatch:
 
 permissions:
