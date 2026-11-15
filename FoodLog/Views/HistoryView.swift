@@ -323,24 +323,11 @@ public struct HistoryView: View {
     }
 
     private func duplicateFoodEntry(_ entry: FoodEntryRecord) {
-        let copy = FoodEntryRecord(
-            name: entry.name,
-            mealType: entry.mealType,
-            eatenAt: Date(),
-            grams: entry.grams,
-            calories: entry.calories,
-            proteinGrams: entry.proteinGrams,
-            fatGrams: entry.fatGrams,
-            carbGrams: entry.carbGrams,
-            photoFilenames: entry.photoFilenames,
-            isFromNutritionLabel: entry.isFromNutritionLabel,
-            aiAnalysisBasis: entry.aiAnalysisBasis,
-            uncertaintyNote: entry.uncertaintyNote,
-            userNote: entry.userNote
-        )
-        modelContext.insert(copy)
+        let copy = entry.snapshot.duplicated(for: Date())
+        let record = FoodEntryRecord(snapshot: copy)
+        modelContext.insert(record)
         try? modelContext.save()
-        appState.showTemporaryBanner("已再次记录：\(copy.name)")
+        appState.showTemporaryBanner("已再次记录：\(record.name)")
     }
 
     // MARK: - Weight Records Segment
@@ -433,11 +420,6 @@ public struct HistoryView: View {
                             RuleMark(y: .value("目标", appState.profile.targetWeightKg))
                                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                                 .foregroundStyle(FoodLogTheme.morandiCarbTerracotta.opacity(0.8))
-                                .annotation(position: .top, alignment: .leading) {
-                                    Text("目标 \(String(format: "%.1f", appState.profile.targetWeightKg))kg")
-                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(FoodLogTheme.morandiCarbTerracotta)
-                                }
                         }
                         .chartYScale(domain: weightYScaleDomain)
                         .frame(height: 190)
