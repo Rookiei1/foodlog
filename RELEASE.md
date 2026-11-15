@@ -15,7 +15,7 @@
 | 复用分发证书 ID | `WUS3HDT696`（`Rookiei1/nofap-signing` 分支 `signing-assets-v2`，只读复用） |
 | Scheme | `FoodLog` |
 | 营销版本 (`MARKETING_VERSION`) | `1.0.0` |
-| 最新已验证 TestFlight 构建号 (`CURRENT_PROJECT_VERSION`) | `6`（已上传并通过 Apple 构建处理，已自动分发至 Internal Testers） |
+| 最新已验证 TestFlight 构建号 (`CURRENT_PROJECT_VERSION`) | `7`（UI 原生卡片化优化版，已上传并通过 Apple 构建处理，已自动分发至 Internal Testers） |
 | 签名目标 | 仅主应用 `FoodLog.app`（`FoodLogTests` 与 `FoodLogUITests` 不签名上传） |
 | 额外 Capabilities | 无（仅使用系统基础沙盒、标准 Keychain、相机与相册权限说明） |
 | 加密合规 | 不使用自有非豁免加密，`ITSAppUsesNonExemptEncryption` 为 `false` |
@@ -53,4 +53,6 @@
 - **模拟器编译、单元测试与截图 (`Test`)**：`https://github.com/Rookiei1/foodlog/actions/runs/43673169597`（`macos-26` / Xcode 26.6，13 项 `FoodLogTests` 单元测试 0 失败，生成首页预览截图）
 - **TestFlight 只读诊断 (`TestFlight → diagnose`)**：`https://github.com/Rookiei1/foodlog/actions/runs/43677669095`（核验 Bundle ID `com.rookiei1.foodlog`、App Store Connect App `6835001745` 与证书 `WUS3HDT696` 通过）
 - **TestFlight 描述文件准备 (`TestFlight → bootstrap`)**：`https://github.com/Rookiei1/foodlog/actions/runs/43677823925`（基于现有证书 `WUS3HDT696` 生成并核验 `com.rookiei1.foodlog` App Store Provisioning Profile，未创建新证书）
-- **TestFlight 正式签名、归档、上传与构建处理 (`TestFlight → release`)**：`https://github.com/Rookiei1/foodlog/actions/runs/43677917053`（通过 13 项单元测试、`ci/verify_release.py` 归档与 IPA 校验，成功上传 `1.0.0 (6)` 至 App Store Connect `6835001745`，完成 Apple 构建处理并分发给内部测试组）
+- **TestFlight 正式签名、归档、上传与构建处理 (`TestFlight → release`)**：
+  - 构建 6：`https://github.com/Rookiei1/foodlog/actions/runs/43677917053`
+  - 构建 7（新版卡片 UI）：`https://github.com/Rookiei1/foodlog/actions/runs/43684216920`（通过 13 项单元测试、`ci/verify_release.py` 归档与 IPA 校验，成功上传 `1.0.0 (7)` 至 App Store Connect `6835001745`，完成 Apple 构建处理并分发给内部测试组）
