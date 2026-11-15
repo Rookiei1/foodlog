@@ -219,7 +219,7 @@ public struct WeightTrackingView: View {
         case .morningFastingFirst: return "晨起空腹"
         case .lowestOfDay: return "当日最低"
         case .latestOfDay: return "当日最新"
-        case .dailyAverage: return "当日均值"
+        case .averageOfDay: return "当日均值"
         }
     }
 
