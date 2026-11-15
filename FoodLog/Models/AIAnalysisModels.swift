@@ -101,6 +101,10 @@ public struct AIFoodRecognitionResponse: Codable, Equatable, Sendable {
     public var overallUncertaintyBanner: String
     public var items: [AIFoodRecognizedItem]
 
+    public var totalCalories: Double {
+        items.reduce(0.0) { $0 + $1.calories }
+    }
+
     public init(
         mealSummary: String,
         deduplicationNote: String,
