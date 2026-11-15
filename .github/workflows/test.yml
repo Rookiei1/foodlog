@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - ".github/workflows/testflight.yml"
+      - "ci/prepare_apple_key.py"
       - "README.md"
       - "RELEASE.md"
   workflow_dispatch:

@@ -107,6 +107,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          SIGNING_DEPLOY_KEY: ${{ secrets.SIGNING_DEPLOY_KEY }}
 
       - name: Prepare read-only access to the private signing store
         if: inputs.action == 'diagnose' || inputs.action == 'bootstrap' || inputs.action == 'release'
@@ -119,8 +120,10 @@ jobs:
           echo "::add-mask::$SIGNING_STORE_URL"
           mkdir -p "$HOME/.ssh"
           chmod 700 "$HOME/.ssh"
-          printf '%s\n' "$SIGNING_DEPLOY_KEY" > "$HOME/.ssh/foodlog_signing"
-          chmod 600 "$HOME/.ssh/foodlog_signing"
+          if [[ ! -f "$HOME/.ssh/foodlog_signing" ]]; then
+            printf '%s\n' "$SIGNING_DEPLOY_KEY" > "$HOME/.ssh/foodlog_signing"
+            chmod 600 "$HOME/.ssh/foodlog_signing"
+          fi
           echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' >> "$HOME/.ssh/known_hosts"
           printf 'Host github.com\n  IdentityFile ~/.ssh/foodlog_signing\n  IdentitiesOnly yes\n' >> "$HOME/.ssh/config"
 
