@@ -81,13 +81,22 @@ public final class AppStateViewModel: ObservableObject {
             self.profile = initialProfile
         }
 
-        let loadedProviders: [AIProviderConfig]
+        var loadedProviders: [AIProviderConfig]
         if let data = userDefaults.data(forKey: Keys.providers),
            let decoded = try? JSONDecoder().decode([AIProviderConfig].self, from: data),
            !decoded.isEmpty {
             loadedProviders = decoded
         } else {
             loadedProviders = AIProviderConfig.defaultProviders()
+        }
+
+        // Migrate any legacy "flash" or empty model names for DeepSeek to "deepseek-flash"
+        loadedProviders = loadedProviders.map { provider in
+            var p = provider
+            if p.kind == .deepSeek && (p.modelName.lowercased() == "flash" || p.modelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                p.modelName = "deepseek-flash"
+            }
+            return p
         }
         self.providers = loadedProviders
 

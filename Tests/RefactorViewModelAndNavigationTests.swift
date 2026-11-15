@@ -82,9 +82,9 @@ final class RefactorViewModelAndNavigationTests: XCTestCase {
             XCTFail("DeepSeek provider must be registered in default providers")
             return
         }
-        XCTAssertEqual(deepSeek.modelName, "flash", "Default model for DeepSeek must be flash")
+        XCTAssertEqual(deepSeek.modelName, "deepseek-flash", "Default model for DeepSeek must be deepseek-flash")
         XCTAssertEqual(deepSeek.baseURL, "https://api.deepseek.com/v1")
-        XCTAssertTrue(deepSeek.supportsVision, "DeepSeek flash must support vision")
+        XCTAssertTrue(deepSeek.supportsVision, "DeepSeek deepseek-flash must support vision")
     }
 
     func testDeepSeekMissingKeySmoothFallbackToMockWithoutError() async throws {
@@ -93,7 +93,7 @@ final class RefactorViewModelAndNavigationTests: XCTestCase {
             name: "DeepSeek API",
             kind: .deepSeek,
             baseURL: "https://api.deepseek.com/v1",
-            modelName: "flash"
+            modelName: "deepseek-flash"
         )
         let emptyKeychain = InMemoryKeychainStore() // No API key saved
 

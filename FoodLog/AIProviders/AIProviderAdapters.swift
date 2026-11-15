@@ -81,17 +81,28 @@ public enum AIPromptBuilder {
 public struct OpenAICompatibleAdapter: AIProviderAdapter {
     public init() {}
 
+    public static func effectiveModelName(for config: AIProviderConfig) -> String {
+        let trimmed = config.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if config.kind == .deepSeek {
+            if trimmed.isEmpty || trimmed.lowercased() == "flash" {
+                return "deepseek-flash"
+            }
+        }
+        return trimmed.isEmpty ? "deepseek-flash" : trimmed
+    }
+
     public func testConnection(config: AIProviderConfig, apiKey: String) async throws -> String {
         let endpoint = try Self.chatCompletionsURL(from: config.baseURL)
+        let model = Self.effectiveModelName(for: config)
         let body: [String: Any] = [
-            "model": config.modelName,
+            "model": model,
             "messages": [
                 ["role": "user", "content": "请回复 OK"]
             ],
             "max_tokens": 16
         ]
         let reply = try await performChatRequest(url: endpoint, apiKey: apiKey, body: body, timeout: config.timeoutSeconds)
-        return "连接成功（\(config.modelName)）：\(reply.prefix(40))"
+        return "连接成功（\(model)）：\(reply.prefix(40))"
     }
 
     public func recognizeFood(
@@ -102,6 +113,7 @@ public struct OpenAICompatibleAdapter: AIProviderAdapter {
         apiKey: String
     ) async throws -> AIFoodRecognitionResponse {
         let endpoint = try Self.chatCompletionsURL(from: config.baseURL)
+        let model = Self.effectiveModelName(for: config)
         let prompt = AIPromptBuilder.foodRecognitionSystemPrompt(
             mealType: mealType,
             imageCount: images.count,
@@ -123,7 +135,7 @@ public struct OpenAICompatibleAdapter: AIProviderAdapter {
         }
 
         let body: [String: Any] = [
-            "model": config.modelName,
+            "model": model,
             "temperature": 0.2,
             "messages": [
                 ["role": "user", "content": userContent]
@@ -141,9 +153,10 @@ public struct OpenAICompatibleAdapter: AIProviderAdapter {
         apiKey: String
     ) async throws -> AIComprehensiveReport {
         let endpoint = try Self.chatCompletionsURL(from: config.baseURL)
+        let model = Self.effectiveModelName(for: config)
         let prompt = AIPromptBuilder.comprehensiveAnalysisPrompt(digest: digest, profile: profile)
         let body: [String: Any] = [
-            "model": config.modelName,
+            "model": model,
             "temperature": 0.3,
             "messages": [
                 ["role": "user", "content": prompt]
@@ -154,7 +167,7 @@ public struct OpenAICompatibleAdapter: AIProviderAdapter {
             rawReply,
             digest: digest,
             providerName: config.name,
-            modelName: config.modelName
+            modelName: model
         )
     }
 

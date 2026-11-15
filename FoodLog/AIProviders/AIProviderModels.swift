@@ -34,7 +34,7 @@ public enum AIProviderKind: String, CaseIterable, Codable, Identifiable, Sendabl
         case .openAI:
             return ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"]
         case .deepSeek:
-            return ["flash", "deepseek-chat", "deepseek-reasoner", "deepseek-vl2"]
+            return ["deepseek-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"]
         case .gemini:
             return ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"]
         case .openAICompatible:
@@ -105,7 +105,7 @@ public struct AIProviderConfig: Codable, Equatable, Identifiable, Sendable {
                 name: "DeepSeek API",
                 kind: .deepSeek,
                 baseURL: "https://api.deepseek.com/v1",
-                modelName: "flash"
+                modelName: "deepseek-flash"
             ),
             AIProviderConfig(
                 id: UUID(uuidString: "11111111-2222-3333-4444-555555555501") ?? UUID(),
@@ -157,7 +157,7 @@ public enum AIVisionCapabilityChecker {
         case .openAI:
             return lower.contains("gpt-4o") || lower.contains("gpt-4.1") || lower.contains("gpt-4-turbo") || lower.contains("vision") || lower.contains("gpt-4.5")
         case .deepSeek:
-            return lower.contains("flash") || lower.contains("vl") || lower.contains("vision")
+            return lower.contains("flash") || lower.contains("vl") || lower.contains("vision") || lower.contains("v4-pro") || lower.contains("v4")
         case .openAICompatible:
             let visionMarkers = ["flash", "vl", "vision", "4o", "4.1", "gemini", "claude-3", "pixtral", "llava", "qvq", "4v"]
             return visionMarkers.contains { lower.contains($0) }
@@ -185,7 +185,7 @@ public enum AIServiceError: LocalizedError, Equatable, Sendable {
         case .invalidBaseURL(let url):
             return "API 地址格式无效：\(url)"
         case .modelDoesNotSupportVision(let model):
-            return "当前模型「\(model)」不支持图片视觉输入（例如纯文本模型 deepseek-chat）。请切换为支持视觉的模型（如 gpt-4o、gemini-2.5-flash、deepseek-vl2），或在供应商设置中开启视觉能力覆盖。"
+            return "当前模型「\(model)」不支持图片视觉输入（例如纯文本模型 deepseek-chat）。请切换为支持视觉的模型（如 deepseek-flash、deepseek-v4-pro、gemini-2.5-flash），或在供应商设置中开启视觉能力覆盖。"
         case .unauthorized(let detail):
             return "API 鉴权失败（401/403）：请检查 Keychain 中的 API Key 是否有效。\(detail)"
         case .insufficientQuota(let detail):

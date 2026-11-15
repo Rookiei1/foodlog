@@ -7,6 +7,8 @@ final class AIProviderAndValidationTests: XCTestCase {
         XCTAssertFalse(AIVisionCapabilityChecker.supportsVision(kind: .openAI, modelName: "o3-mini"))
 
         XCTAssertTrue(AIVisionCapabilityChecker.supportsVision(kind: .deepSeek, modelName: "flash"))
+        XCTAssertTrue(AIVisionCapabilityChecker.supportsVision(kind: .deepSeek, modelName: "deepseek-flash"))
+        XCTAssertTrue(AIVisionCapabilityChecker.supportsVision(kind: .deepSeek, modelName: "deepseek-v4-pro"))
         XCTAssertTrue(AIVisionCapabilityChecker.supportsVision(kind: .openAI, modelName: "gpt-4o"))
         XCTAssertTrue(AIVisionCapabilityChecker.supportsVision(kind: .openAI, modelName: "gpt-4o-mini"))
         XCTAssertTrue(AIVisionCapabilityChecker.supportsVision(kind: .gemini, modelName: "gemini-2.5-flash"))
@@ -137,5 +139,28 @@ final class AIProviderAndValidationTests: XCTestCase {
         // Switching default provider preserves settings
         vm.defaultVisionProviderID = deepSeek.id
         XCTAssertEqual(vm.defaultVisionProvider.id, deepSeek.id)
+    }
+
+    func testDeepSeekFlashModelNormalization() {
+        let legacyConfig = AIProviderConfig(
+            name: "DeepSeek API",
+            kind: .deepSeek,
+            modelName: "flash"
+        )
+        XCTAssertEqual(OpenAICompatibleAdapter.effectiveModelName(for: legacyConfig), "deepseek-flash")
+
+        let currentConfig = AIProviderConfig(
+            name: "DeepSeek API",
+            kind: .deepSeek,
+            modelName: "deepseek-flash"
+        )
+        XCTAssertEqual(OpenAICompatibleAdapter.effectiveModelName(for: currentConfig), "deepseek-flash")
+
+        let proConfig = AIProviderConfig(
+            name: "DeepSeek API",
+            kind: .deepSeek,
+            modelName: "deepseek-v4-pro"
+        )
+        XCTAssertEqual(OpenAICompatibleAdapter.effectiveModelName(for: proConfig), "deepseek-v4-pro")
     }
 }

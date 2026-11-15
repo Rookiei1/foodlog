@@ -21,7 +21,7 @@ public struct SettingsView: View {
     // DeepSeek API Configuration
     @State private var apiKeyInput: String = ""
     @State private var baseURLInput: String = "https://api.deepseek.com/v1"
-    @State private var selectedModel: String = "flash"
+    @State private var selectedModel: String = "deepseek-flash"
     @State private var customModelText: String = ""
     @State private var isTestingConnection: Bool = false
     @State private var testStatusMessage: String? = nil
@@ -38,7 +38,10 @@ public struct SettingsView: View {
     public init() {}
 
     private var deepSeekConfig: AIProviderConfig {
-        if let ds = appState.providers.first(where: { $0.kind == .deepSeek }) {
+        if var ds = appState.providers.first(where: { $0.kind == .deepSeek }) {
+            if ds.modelName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "flash" || ds.modelName.isEmpty {
+                ds.modelName = "deepseek-flash"
+            }
             return ds
         }
         return AIProviderConfig(
@@ -46,7 +49,7 @@ public struct SettingsView: View {
             name: "DeepSeek API",
             kind: .deepSeek,
             baseURL: "https://api.deepseek.com/v1",
-            modelName: "flash"
+            modelName: "deepseek-flash"
         )
     }
 
@@ -57,6 +60,7 @@ public struct SettingsView: View {
                 exportAndBackupSection
                 aboutSection
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("设置与导出")
             .navigationBarTitleDisplayMode(.inline)
             .fileImporter(
@@ -133,24 +137,33 @@ public struct SettingsView: View {
             .padding(.vertical, 4)
 
             Picker("模型选择", selection: $selectedModel) {
-                Text("flash（推荐 · 快速识别）").tag("flash")
-                Text("deepseek-chat").tag("deepseek-chat")
-                if !customModelText.isEmpty && customModelText != "flash" && customModelText != "deepseek-chat" {
+                Text("deepseek-flash（推荐 · 极速识别）").tag("deepseek-flash")
+                Text("deepseek-v4-pro（高精度）").tag("deepseek-v4-pro")
+                Text("deepseek-chat（纯文本）").tag("deepseek-chat")
+                if !customModelText.isEmpty && customModelText != "deepseek-flash" && customModelText != "deepseek-v4-pro" && customModelText != "deepseek-chat" {
                     Text(customModelText).tag(customModelText)
                 }
             }
             .onChange(of: selectedModel) { _, newModel in
-                updateDeepSeekModel(newModel)
+                var effective = newModel.trimmingCharacters(in: .whitespacesAndNewlines)
+                if effective.lowercased() == "flash" {
+                    effective = "deepseek-flash"
+                }
+                updateDeepSeekModel(effective)
             }
 
             HStack {
-                TextField("或手动输入模型名", text: $customModelText)
+                TextField("或手动输入模型名（如 deepseek-flash）", text: $customModelText)
                     .font(.caption)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 if !customModelText.isEmpty {
                     Button("使用") {
-                        let trimmed = customModelText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        dismissKeyboard()
+                        var trimmed = customModelText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmed.lowercased() == "flash" {
+                            trimmed = "deepseek-flash"
+                        }
                         selectedModel = trimmed
                         updateDeepSeekModel(trimmed)
                     }
@@ -268,18 +281,35 @@ public struct SettingsView: View {
 
     // MARK: - Helper Methods
 
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
     private func loadDeepSeekConfig() {
         let config = deepSeekConfig
         apiKeyInput = appState.apiKey(for: config)
         baseURLInput = config.baseURL
-        selectedModel = config.modelName
-        customModelText = config.modelName
+        var model = config.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if model.isEmpty || model.lowercased() == "flash" {
+            model = "deepseek-flash"
+        }
+        selectedModel = model
+        if model == "deepseek-flash" || model == "deepseek-v4-pro" || model == "deepseek-chat" {
+            customModelText = ""
+        } else {
+            customModelText = model
+        }
     }
 
     private func saveDeepSeekKey() {
+        dismissKeyboard()
         var config = deepSeekConfig
-        config.modelName = selectedModel
-        config.baseURL = baseURLInput
+        var model = selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if model.isEmpty || model.lowercased() == "flash" {
+            model = "deepseek-flash"
+        }
+        config.modelName = model
+        config.baseURL = baseURLInput.trimmingCharacters(in: .whitespacesAndNewlines)
         try? appState.upsertProvider(config, apiKey: apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines))
         appState.defaultVisionProviderID = config.id
         appState.defaultAnalysisProviderID = config.id
@@ -288,7 +318,11 @@ public struct SettingsView: View {
 
     private func updateDeepSeekModel(_ newModel: String) {
         var config = deepSeekConfig
-        config.modelName = newModel
+        var model = newModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if model.isEmpty || model.lowercased() == "flash" {
+            model = "deepseek-flash"
+        }
+        config.modelName = model
         try? appState.upsertProvider(config, apiKey: nil)
         appState.defaultVisionProviderID = config.id
         appState.defaultAnalysisProviderID = config.id
@@ -296,13 +330,15 @@ public struct SettingsView: View {
 
     private func updateDeepSeekBaseURL(_ newURL: String) {
         var config = deepSeekConfig
-        config.baseURL = newURL
+        config.baseURL = newURL.trimmingCharacters(in: .whitespacesAndNewlines)
         try? appState.upsertProvider(config, apiKey: nil)
     }
 
     private func testDeepSeekConnection() {
+        dismissKeyboard()
         isTestingConnection = true
         testStatusMessage = nil
+        saveDeepSeekKey()
         let config = deepSeekConfig
         let key = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -311,7 +347,6 @@ public struct SettingsView: View {
                 if key.isEmpty {
                     throw AIServiceError.missingAPIKey(providerName: "DeepSeek")
                 }
-                saveDeepSeekKey()
                 let adapter = AIProviderRouter.adapter(for: .deepSeek)
                 let reply = try await adapter.testConnection(config: config, apiKey: key)
                 testSucceeded = true
