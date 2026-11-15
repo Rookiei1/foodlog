@@ -57,25 +57,33 @@ public struct FoodLogListView: View {
                     if filterScope == .selectedDay {
                         HStack {
                             DatePicker(
-                                "查看或补录日期",
+                                "",
                                 selection: $appState.selectedDate,
                                 displayedComponents: [.date]
                             )
+                            .labelsHidden()
                             .environment(\.locale, Locale(identifier: "zh_CN"))
-                            .font(.subheadline)
+
+                            let totalKcal = filteredEntries.reduce(0.0) { $0 + $1.calories }
+                            Text("共 \(filteredEntries.count) 项 · \(Int(totalKcal.rounded())) kcal")
+                                .font(.caption.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(.secondary)
+
                             Spacer()
-                            Button("今天") {
-                                appState.jumpToToday()
+
+                            if !Calendar.current.isDateInToday(appState.selectedDate) {
+                                Button("回今天") {
+                                    appState.jumpToToday()
+                                }
+                                .font(.caption.weight(.semibold))
                             }
-                            .font(.caption.weight(.semibold))
-                            .buttonStyle(.bordered)
                         }
                     }
 
                     if filterScope != .favorites {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                mealChip(title: "全部餐次", isSelected: selectedMealFilter == nil) {
+                                mealChip(title: "全部", isSelected: selectedMealFilter == nil) {
                                     selectedMealFilter = nil
                                 }
                                 ForEach(MealType.allCases) { meal in
@@ -99,20 +107,21 @@ public struct FoodLogListView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("饮食记录")
-            .searchable(text: $searchText, prompt: "搜索食物名称或备注")
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, prompt: "搜索食物名称")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         appState.openPhotoRecognitionSheet()
                     } label: {
-                        Label("拍照识别", systemImage: "camera.fill")
+                        Image(systemName: "camera.fill")
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         appState.openNewFoodSheet()
                     } label: {
-                        Label("新增记录", systemImage: "plus")
+                        Image(systemName: "plus")
                     }
                 }
             }
@@ -123,7 +132,7 @@ public struct FoodLogListView: View {
         Button(action: action) {
             Text(title)
                 .font(.caption.weight(.semibold))
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 13)
                 .padding(.vertical, 6)
                 .background(isSelected ? FoodLogTheme.calorieGreen : Color(.tertiarySystemGroupedBackground))
                 .foregroundStyle(isSelected ? .white : .primary)
@@ -136,31 +145,27 @@ public struct FoodLogListView: View {
         List {
             if filteredEntries.isEmpty {
                 Section {
-                    VStack(spacing: 10) {
-                        Image(systemName: "fork.knife.circle")
-                            .font(.system(size: 40))
-                            .foregroundStyle(.secondary)
-                        Text("当前筛选条件下暂无饮食记录")
-                            .font(.subheadline.weight(.medium))
-                        Text("支持随时补录或修改任意历史日期的餐食")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    VStack(spacing: 12) {
+                        Image(systemName: "fork.knife.circle.fill")
+                            .font(.system(size: 42))
+                            .foregroundStyle(FoodLogTheme.calorieGreen.opacity(0.6))
+                        Text("暂无饮食记录")
+                            .font(.subheadline.weight(.semibold))
                         HStack(spacing: 12) {
                             Button {
                                 appState.openPhotoRecognitionSheet()
                             } label: {
-                                Label("AI 拍照识别", systemImage: "camera.fill")
+                                Label("AI 拍照记餐", systemImage: "camera.fill")
                             }
                             .buttonStyle(.borderedProminent)
 
                             Button {
                                 appState.openNewFoodSheet()
                             } label: {
-                                Label("手动新增", systemImage: "square.and.pencil")
+                                Label("手动添加", systemImage: "plus")
                             }
                             .buttonStyle(.bordered)
                         }
-                        .padding(.top, 4)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 28)
@@ -171,52 +176,58 @@ public struct FoodLogListView: View {
                     Button {
                         appState.openEditFoodSheet(snapshot)
                     } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Label(snapshot.mealType.title, systemImage: snapshot.mealType.systemImage)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(FoodLogTheme.calorieGreen)
-                                Text("\(snapshot.dayKey) \(DateKeyHelper.timeString(for: snapshot.eatenAt))")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Text("\(Int(snapshot.calories.rounded())) kcal")
-                                    .font(.subheadline.weight(.bold).monospacedDigit())
-                                    .foregroundStyle(.primary)
-                            }
+                        HStack(spacing: 12) {
+                            FoodThumbnailBadge(
+                                photoFilename: snapshot.photoFilenames.first,
+                                mealType: snapshot.mealType,
+                                size: 46
+                            )
 
-                            HStack(spacing: 6) {
-                                Text(snapshot.name)
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(.primary)
-                                if snapshot.isFromNutritionLabel {
-                                    Text("营养成分表")
-                                        .font(.caption2.weight(.semibold))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.blue.opacity(0.15))
-                                        .foregroundStyle(.blue)
-                                        .clipShape(Capsule())
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(spacing: 6) {
+                                    Text(snapshot.name)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                    if snapshot.isFromNutritionLabel {
+                                        Text("营养表")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 2)
+                                            .background(Color.blue.opacity(0.14))
+                                            .foregroundStyle(.blue)
+                                            .clipShape(Capsule())
+                                    }
                                 }
-                                if !snapshot.photoFilenames.isEmpty {
-                                    Label("\(snapshot.photoFilenames.count)", systemImage: "photo")
+
+                                HStack(spacing: 6) {
+                                    Text(filterScope == .allHistory ? "\(DateKeyHelper.shortDateString(for: snapshot.eatenAt)) \(snapshot.mealType.title)" : "\(DateKeyHelper.timeString(for: snapshot.eatenAt)) \(snapshot.mealType.title)")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
+                                    Text("· \(Int(snapshot.grams))g")
+                                        .font(.caption2.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                HStack(spacing: 5) {
+                                    MacroTagPill(prefix: "P", grams: snapshot.proteinGrams, color: FoodLogTheme.proteinBlue)
+                                    MacroTagPill(prefix: "F", grams: snapshot.fatGrams, color: FoodLogTheme.fatAmber)
+                                    MacroTagPill(prefix: "C", grams: snapshot.carbGrams, color: FoodLogTheme.carbCoral)
                                 }
                             }
 
-                            Text("重量 \(Int(snapshot.grams))g  |  蛋白质 \(String(format: "%.1f", snapshot.proteinGrams))g · 脂肪 \(String(format: "%.1f", snapshot.fatGrams))g · 碳水 \(String(format: "%.1f", snapshot.carbGrams))g")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 4)
 
-                            if !snapshot.aiAnalysisBasis.isEmpty {
-                                Text(snapshot.aiAnalysisBasis)
-                                    .font(.caption2)
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text("\(Int(snapshot.calories.rounded()))")
+                                    .font(.system(size: 18, weight: .bold, design: .rounded).monospacedDigit())
+                                    .foregroundStyle(.primary)
+                                Text("kcal")
+                                    .font(.system(size: 10))
                                     .foregroundStyle(.secondary)
-                                    .lineLimit(2)
                             }
                         }
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 3)
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
@@ -231,7 +242,7 @@ public struct FoodLogListView: View {
                             let dup = snapshot.duplicated(for: appState.selectedDate)
                             modelContext.insert(FoodEntryRecord(snapshot: dup))
                             try? modelContext.save()
-                            appState.showTemporaryBanner("已复制「\(snapshot.name)」到 \(appState.selectedDayKey)")
+                            appState.showTemporaryBanner("已复制「\(snapshot.name)」")
                         } label: {
                             Label("复制", systemImage: "doc.on.doc")
                         }
@@ -243,7 +254,7 @@ public struct FoodLogListView: View {
                             modelContext.insert(FavoriteFoodTemplate(snapshot: fav))
                             record.isFavorite = true
                             try? modelContext.save()
-                            appState.showTemporaryBanner("已加入常吃收藏「\(snapshot.name)」")
+                            appState.showTemporaryBanner("已收藏「\(snapshot.name)」")
                         } label: {
                             Label("收藏", systemImage: "star.fill")
                         }
@@ -257,20 +268,32 @@ public struct FoodLogListView: View {
 
     private var favoritesManagementList: some View {
         List {
-            Section("点击右侧「快记」可按默认克数一键记入当前所选日期（\(appState.selectedDayKey)）") {
+            Section {
                 if favoriteTemplates.isEmpty {
-                    Text("暂无收藏食物，可在饮食列表中右滑任意记录点击「收藏」添加。")
+                    Text("左滑或右滑饮食记录即可加入常吃收藏。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(favoriteTemplates) { fav in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
+                        let kcal = Int((fav.caloriesPer100g * fav.defaultGrams / 100.0).rounded())
+                        let protein = fav.proteinPer100g * fav.defaultGrams / 100.0
+                        let fat = fav.fatPer100g * fav.defaultGrams / 100.0
+                        let carb = fav.carbPer100g * fav.defaultGrams / 100.0
+
+                        HStack(spacing: 12) {
+                            FoodThumbnailBadge(photoFilename: nil, mealType: fav.defaultMealType, size: 42)
+
+                            VStack(alignment: .leading, spacing: 5) {
                                 Text(fav.name)
                                     .font(.subheadline.weight(.semibold))
-                                Text("默认 \(Int(fav.defaultGrams))g · 每100g: \(Int(fav.caloriesPer100g)) kcal | 蛋白 \(String(format: "%.1f", fav.proteinPer100g))g")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                HStack(spacing: 5) {
+                                    Text("\(Int(fav.defaultGrams))g · \(kcal) kcal")
+                                        .font(.caption2.weight(.semibold).monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                    MacroTagPill(prefix: "P", grams: protein, color: FoodLogTheme.proteinBlue)
+                                    MacroTagPill(prefix: "F", grams: fat, color: FoodLogTheme.fatAmber)
+                                    MacroTagPill(prefix: "C", grams: carb, color: FoodLogTheme.carbCoral)
+                                }
                             }
                             Spacer()
                             Button {
@@ -280,13 +303,14 @@ public struct FoodLogListView: View {
                                 fav.useCount += 1
                                 fav.lastUsedAt = Date()
                                 try? modelContext.save()
-                                appState.showTemporaryBanner("已记录「\(fav.name)」")
+                                appState.showTemporaryBanner("已快记「\(fav.name)」")
                             } label: {
-                                Text("快记")
+                                Label("快记", systemImage: "plus")
                                     .font(.caption.weight(.bold))
                             }
                             .buttonStyle(.borderedProminent)
                         }
+                        .padding(.vertical, 2)
                     }
                     .onDelete { offsets in
                         for index in offsets {
@@ -327,7 +351,6 @@ public struct FoodEntryEditorSheet: View {
     @State private var userNote: String = ""
     @State private var saveToFavorites: Bool = false
 
-    // Nutrition label helper states
     @State private var showLabelCalculator: Bool = false
     @State private var labelEnergyUnit: EnergyUnit = .kilojoule
     @State private var labelEnergyPer100g: Double = 1050
@@ -352,18 +375,18 @@ public struct FoodEntryEditorSheet: View {
     public var body: some View {
         NavigationStack {
             Form {
-                Section("基础信息（支持修改任意历史日期）") {
-                    TextField("食物名称（如：香煎鸡排、盒装纯牛奶）", text: $name)
+                Section("餐食信息") {
+                    TextField("食物名称（如：香煎鸡排、纯牛奶）", text: $name)
                         .accessibilityIdentifier("food-editor-name-field")
 
-                    Picker("所属餐次", selection: $mealType) {
+                    Picker("餐次", selection: $mealType) {
                         ForEach(MealType.allCases) { meal in
                             Label(meal.title, systemImage: meal.systemImage).tag(meal)
                         }
                     }
 
                     DatePicker(
-                        "食用日期与时间",
+                        "食用时间",
                         selection: $eatenAt,
                         displayedComponents: [.date, .hourAndMinute]
                     )
@@ -371,60 +394,21 @@ public struct FoodEntryEditorSheet: View {
                 }
 
                 Section {
-                    DisclosureGroup("包装「营养成分表」换算器（支持 kJ 自动转 kcal）", isExpanded: $showLabelCalculator) {
+                    DisclosureGroup("包装营养成分表换算（kJ 转 kcal）", isExpanded: $showLabelCalculator) {
                         Picker("能量单位", selection: $labelEnergyUnit) {
                             ForEach(EnergyUnit.allCases) { unit in
                                 Text(unit.title).tag(unit)
                             }
                         }
 
-                        HStack {
-                            Text("每 100g 能量 (\(labelEnergyUnit.rawValue))")
-                            Spacer()
-                            TextField("能量", value: $labelEnergyPer100g, format: .number)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 90)
-                        }
-
-                        HStack {
-                            Text("每 100g 蛋白质 (g)")
-                            Spacer()
-                            TextField("蛋白质", value: $labelProteinPer100g, format: .number)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 90)
-                        }
-
-                        HStack {
-                            Text("每 100g 脂肪 (g)")
-                            Spacer()
-                            TextField("脂肪", value: $labelFatPer100g, format: .number)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 90)
-                        }
-
-                        HStack {
-                            Text("每 100g 碳水 (g)")
-                            Spacer()
-                            TextField("碳水", value: $labelCarbPer100g, format: .number)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 90)
-                        }
-
-                        HStack {
-                            Text("包装净含量 (g/ml)")
-                            Spacer()
-                            TextField("净含量", value: $labelNetWeightGrams, format: .number)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 90)
-                        }
+                        numberRow(title: "每 100g 能量 (\(labelEnergyUnit.rawValue))", value: $labelEnergyPer100g)
+                        numberRow(title: "每 100g 蛋白质 (g)", value: $labelProteinPer100g)
+                        numberRow(title: "每 100g 脂肪 (g)", value: $labelFatPer100g)
+                        numberRow(title: "每 100g 碳水 (g)", value: $labelCarbPer100g)
+                        numberRow(title: "包装净含量 (g/ml)", value: $labelNetWeightGrams)
 
                         VStack(alignment: .leading) {
-                            Text("本次食用比例：\(Int((labelConsumedRatio * 100).rounded()))%")
+                            Text("食用比例：\(Int((labelConsumedRatio * 100).rounded()))%")
                                 .font(.caption)
                             Slider(value: $labelConsumedRatio, in: 0.1...2.0, step: 0.05)
                         }
@@ -432,28 +416,28 @@ public struct FoodEntryEditorSheet: View {
                         Button {
                             applyNutritionLabelCalculation()
                         } label: {
-                            Label("按营养成分表自动填入数值", systemImage: "checkmark.circle.fill")
+                            Label("按成分表自动填入", systemImage: "checkmark.circle.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
                     }
                 }
 
-                Section("分量与三大营养素") {
-                    numberRow(title: "食物重量 (克 g)", value: $grams)
+                Section("分量与营养素") {
+                    numberRow(title: "重量 (g)", value: $grams)
                     numberRow(title: "热量 (kcal)", value: $calories)
                     numberRow(title: "蛋白质 (g)", value: $proteinGrams)
                     numberRow(title: "脂肪 (g)", value: $fatGrams)
                     numberRow(title: "碳水化合物 (g)", value: $carbGrams)
                 }
 
-                Section("餐食照片（支持多张，已自动压缩优化）") {
+                Section("照片与备注") {
                     PhotosPicker(
                         selection: $selectedPhotoItems,
                         maxSelectionCount: 5,
                         matching: .images
                     ) {
-                        Label("从相册选择照片（可多选）", systemImage: "photo.on.rectangle.angled")
+                        Label("添加餐食照片", systemImage: "photo.on.rectangle.angled")
                     }
                     .onChange(of: selectedPhotoItems) { _, newItems in
                         Task {
@@ -476,13 +460,8 @@ public struct FoodEntryEditorSheet: View {
                                             Image(uiImage: uiImage)
                                                 .resizable()
                                                 .scaledToFill()
-                                                .frame(width: 76, height: 76)
+                                                .frame(width: 72, height: 72)
                                                 .clipShape(RoundedRectangle(cornerRadius: 10))
-                                        } else {
-                                            RoundedRectangle(cornerRadius: 10)
-                                                .fill(Color.secondary.opacity(0.2))
-                                                .frame(width: 76, height: 76)
-                                                .overlay(Image(systemName: "photo"))
                                         }
                                         Button {
                                             ImageStorageService.shared.deletePhotos(filenames: [filename])
@@ -498,22 +477,20 @@ public struct FoodEntryEditorSheet: View {
                             .padding(.vertical, 4)
                         }
                     }
-                }
 
-                Section("分析依据与备注") {
-                    TextField("AI 估算依据 / 来源说明（选填）", text: $aiAnalysisBasis, axis: .vertical)
-                        .lineLimit(2...4)
-                    TextField("不确定性提示（选填）", text: $uncertaintyNote, axis: .vertical)
-                        .lineLimit(1...3)
-                    TextField("用户备注（如：去皮、少油、训练后加餐）", text: $userNote, axis: .vertical)
-                        .lineLimit(2...4)
+                    TextField("备注（选填）", text: $userNote)
+                    if !aiAnalysisBasis.isEmpty {
+                        Text("估算依据：\(aiAnalysisBasis)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
 
                     if existingSnapshot == nil {
-                        Toggle("同时加入「常吃食物收藏」", isOn: $saveToFavorites)
+                        Toggle("加入常吃收藏", isOn: $saveToFavorites)
                     }
                 }
             }
-            .navigationTitle(existingSnapshot == nil ? "新增饮食记录" : "编辑饮食记录")
+            .navigationTitle(existingSnapshot == nil ? "新增记录" : "编辑记录")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -580,7 +557,7 @@ public struct FoodEntryEditorSheet: View {
         carbGrams = result.carbGrams
         isFromNutritionLabel = true
         aiAnalysisBasis = result.explanation
-        uncertaintyNote = "依据包装营养成分表与净含量换算"
+        uncertaintyNote = "依据包装营养成分表换算"
     }
 
     private func saveRecord() {

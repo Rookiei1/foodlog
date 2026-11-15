@@ -16,7 +16,7 @@ public struct AIAnalysisView: View {
 
     @State private var selectedSpan: AnalysisTimeSpan = .days7
     @State private var selectedProviderID: UUID = UUID()
-    @State private var hasConfirmedDigestSend: Bool = false
+    @State private var hasConfirmedDigestSend: Bool = true
 
     @State private var isGenerating: Bool = false
     @State private var analysisTask: Task<Void, Never>? = nil
@@ -42,104 +42,25 @@ public struct AIAnalysisView: View {
 
     public var body: some View {
         NavigationStack {
-            List {
-                Section("1. 选择统计范围与分析模型") {
-                    Picker("分析范围", selection: $selectedSpan) {
-                        ForEach(AnalysisTimeSpan.allCases) { span in
-                            Text(span.title).tag(span)
-                        }
+            ScrollView {
+                VStack(spacing: 16) {
+                    controlAndDigestCard
+
+                    if let report = currentReport {
+                        visualReportCards(report: report)
                     }
 
-                    Picker("AI 分析模型", selection: $selectedProviderID) {
-                        ForEach(appState.providers) { provider in
-                            Text("\(provider.name) · \(provider.modelName)").tag(provider.id)
-                        }
+                    if !savedReportRecords.isEmpty {
+                        savedReportsSection
                     }
+                    Spacer(minLength: 24)
                 }
-
-                Section("2. 真实数据库客观摘要预览（确认后发送给 AI）") {
-                    Text(objectiveDigest.promptReadyText)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 4)
-
-                    Toggle("我已核对以上客观统计摘要，确认发送给所选 AI 模型生成综合分析", isOn: $hasConfirmedDigestSend)
-                        .font(.caption.weight(.medium))
-                        .accessibilityIdentifier("confirm-send-digest-toggle")
-
-                    if isGenerating {
-                        HStack(spacing: 12) {
-                            ProgressView()
-                            Text("正在生成中文饮食与体重综合报告…")
-                                .font(.subheadline)
-                            Spacer()
-                            Button("取消", role: .cancel) {
-                                analysisTask?.cancel()
-                                isGenerating = false
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                    } else {
-                        Button {
-                            runComprehensiveAnalysis()
-                        } label: {
-                            HStack {
-                                Spacer()
-                                Label("分析我的饮食与体重", systemImage: "wand.and.stars")
-                                    .font(.headline)
-                                Spacer()
-                            }
-                        }
-                        .disabled(!hasConfirmedDigestSend)
-                        .accessibilityIdentifier("run-comprehensive-analysis-button")
-                    }
-
-                    if let errorMessage {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                }
-
-                if let report = currentReport {
-                    activeReportSections(report: report)
-                }
-
-                if !savedReportRecords.isEmpty {
-                    Section("已保存的历史分析报告") {
-                        ForEach(savedReportRecords) { record in
-                            if let decoded = record.decodedReport {
-                                Button {
-                                    currentReport = decoded
-                                    preparePDFExport(for: decoded)
-                                } label: {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text("\(decoded.spanTitle) · \(decoded.dateRangeText)")
-                                                .font(.subheadline.weight(.semibold))
-                                                .foregroundStyle(.primary)
-                                            Text("模型：\(decoded.providerName) (\(decoded.modelName))")
-                                                .font(.caption2)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "doc.richtext")
-                                            .foregroundStyle(FoodLogTheme.calorieGreen)
-                                    }
-                                }
-                            }
-                        }
-                        .onDelete { offsets in
-                            for index in offsets {
-                                modelContext.delete(savedReportRecords[index])
-                            }
-                            try? modelContext.save()
-                        }
-                    }
-                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
             }
-            .listStyle(.insetGrouped)
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("AI 综合分析")
+            .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 selectedProviderID = appState.defaultAnalysisProvider.id
                 if currentReport == nil, let latest = savedReportRecords.first?.decodedReport {
@@ -153,66 +74,320 @@ public struct AIAnalysisView: View {
         }
     }
 
+    // MARK: - 1. Control & Visual Digest Card
+
+    private var controlAndDigestCard: some View {
+        let digest = objectiveDigest
+
+        return VStack(alignment: .leading, spacing: 14) {
+            Picker("统计范围", selection: $selectedSpan) {
+                ForEach(AnalysisTimeSpan.allCases) { span in
+                    Text(span.title).tag(span)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            HStack {
+                Image(systemName: "cpu")
+                    .font(.subheadline)
+                    .foregroundStyle(FoodLogTheme.calorieGreen)
+                Text("分析模型")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Picker("AI 分析模型", selection: $selectedProviderID) {
+                    ForEach(appState.providers) { provider in
+                        Text("\(provider.name) · \(provider.modelName)").tag(provider.id)
+                    }
+                }
+                .labelsHidden()
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                digestMetricTile(
+                    icon: "flame.fill",
+                    tint: FoodLogTheme.calorieGreen,
+                    title: "日均摄入热量",
+                    value: "\(Int(digest.averageDailyCalories.rounded())) kcal",
+                    sub: "目标 \(Int(digest.targetCalories.rounded())) kcal"
+                )
+                digestMetricTile(
+                    icon: "bolt.heart.fill",
+                    tint: FoodLogTheme.proteinBlue,
+                    title: "日均蛋白质",
+                    value: "\(Int(digest.averageDailyProteinGrams.rounded())) g",
+                    sub: "目标 \(Int(digest.targetProteinGrams.rounded())) g"
+                )
+                digestMetricTile(
+                    icon: "scalemass.fill",
+                    tint: FoodLogTheme.weightPurple,
+                    title: "周期体重变化",
+                    value: digest.weightTrend.totalChangeKg.map { String(format: "%+.2f kg", $0) } ?? "--",
+                    sub: digest.weightTrend.weeklyRateKg.map { String(format: "%+.2f kg/周", $0) } ?? "记录 \(digest.loggedWeightDaysCount) 天"
+                )
+                digestMetricTile(
+                    icon: "calendar.badge.checkmark",
+                    tint: FoodLogTheme.fatAmber,
+                    title: "有效记录天数",
+                    value: "\(digest.loggedFoodDaysCount) 天",
+                    sub: digest.underEatingDates.isEmpty ? "全周期达标" : "偏低 \(digest.underEatingDates.count) 天"
+                )
+            }
+
+            Toggle("确认发送以上真实统计摘要至所选 AI", isOn: $hasConfirmedDigestSend)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("confirm-send-digest-toggle")
+
+            if isGenerating {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("正在生成诊断报告…")
+                        .font(.subheadline.weight(.medium))
+                    Spacer()
+                    Button("取消", role: .cancel) {
+                        analysisTask?.cancel()
+                        isGenerating = false
+                    }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.bordered)
+                }
+                .padding(.vertical, 4)
+            } else {
+                Button {
+                    runComprehensiveAnalysis()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "wand.and.stars")
+                        Text("分析我的饮食与体重")
+                            .fontWeight(.bold)
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(FoodLogTheme.calorieGreen.gradient)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(!hasConfirmedDigestSend)
+                .opacity(hasConfirmedDigestSend ? 1.0 : 0.5)
+                .accessibilityIdentifier("run-comprehensive-analysis-button")
+            }
+
+            if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+        )
+    }
+
+    private func digestMetricTile(icon: String, tint: Color, title: String, value: String, sub: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            Text(value)
+                .font(.system(size: 18, weight: .bold, design: .rounded).monospacedDigit())
+                .lineLimit(1)
+            Text(sub)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(.tertiarySystemGroupedBackground))
+        )
+    }
+
+    // MARK: - 2. Visual Report Cards
+
     @ViewBuilder
-    private func activeReportSections(report: AIComprehensiveReport) -> some View {
-        Section("分析报告操作") {
-            HStack(spacing: 12) {
+    private func visualReportCards(report: AIComprehensiveReport) -> some View {
+        VStack(spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(report.spanTitle)诊断报告")
+                        .font(.headline)
+                    Text("\(report.dateRangeText) · \(report.modelName)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
                 Button {
                     saveReportToDatabase(report)
                 } label: {
-                    Label("保存报告到本机", systemImage: "tray.and.arrow.down.fill")
-                        .font(.subheadline.weight(.semibold))
+                    Label("保存", systemImage: "tray.and.arrow.down.fill")
+                        .font(.caption.weight(.bold))
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
 
                 if let pdfURL = exportedPDFURL {
                     ShareLink(item: pdfURL) {
-                        Label("导出 PDF 报告", systemImage: "square.and.arrow.up")
-                            .font(.subheadline.weight(.semibold))
+                        Label("PDF", systemImage: "square.and.arrow.up")
+                            .font(.caption.weight(.bold))
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
                 }
             }
-        }
+            .padding(.horizontal, 4)
 
-        Section("一、【客观统计】数据库真实汇总") {
-            Text(report.objectiveSummarySection)
-                .font(.footnote.monospacedDigit())
-        }
-
-        Section("二、【估算边界与短期体重波动说明】") {
-            Text(report.estimationAndFluctuationDisclaimer)
-                .font(.footnote)
-                .foregroundStyle(.orange)
-        }
-
-        Section("三、【关联分析】热量、蛋白质与体重趋势") {
-            Text(report.calorieAndWeightAnalysis)
-                .font(.footnote)
-            Divider()
-            Text(report.surplusEvaluation)
-                .font(.footnote.weight(.medium))
-        }
-
-        Section("四、【摄入不足日期与饮食结构问题】") {
-            Text(report.underEatingDaysReview)
-                .font(.footnote)
-            ForEach(Array(report.dietStructureIssues.enumerated()), id: \.offset) { idx, issue in
-                Label("\(idx + 1). \(issue)", systemImage: "exclamationmark.circle")
+            // Card A: Surplus & Weight Relationship
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(FoodLogTheme.calorieGreen)
+                    Text("热量盈余与体重关联")
+                        .font(.subheadline.weight(.bold))
+                }
+                Text(report.surplusEvaluation)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(FoodLogTheme.calorieGreen)
+                Text(report.calorieAndWeightAnalysis)
                     .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-        }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color(.secondarySystemGroupedBackground))
+            )
 
-        Section("五、【AI 建议】下一周饮食与增重调整方案") {
-            ForEach(Array(report.nextWeekActionSuggestions.enumerated()), id: \.offset) { idx, suggestion in
-                Label("\(idx + 1). \(suggestion)", systemImage: "checkmark.circle.fill")
-                    .font(.footnote)
-                    .foregroundStyle(.primary)
+            // Card B: Next Week Action Plan
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.title3)
+                        .foregroundStyle(FoodLogTheme.proteinBlue)
+                    Text("下周行动清单")
+                        .font(.subheadline.weight(.bold))
+                }
+
+                ForEach(Array(report.nextWeekActionSuggestions.enumerated()), id: \.offset) { idx, suggestion in
+                    HStack(alignment: .top, spacing: 10) {
+                        Text("\(idx + 1)")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .frame(width: 20, height: 20)
+                            .background(Circle().fill(FoodLogTheme.proteinBlue))
+                        Text(suggestion)
+                            .font(.footnote.weight(.medium))
+                    }
+                }
+
+                Divider()
+
+                HStack(spacing: 6) {
+                    Image(systemName: "target")
+                        .font(.caption)
+                        .foregroundStyle(FoodLogTheme.calorieGreen)
+                    Text(report.weightGoalAdjustmentAdvice)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(FoodLogTheme.calorieGreen)
+                }
             }
-            Divider()
-            Text(report.weightGoalAdjustmentAdvice)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(FoodLogTheme.calorieGreen)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color(.secondarySystemGroupedBackground))
+            )
+
+            // Card C: Diet Structure & Under-eating Days
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.title3)
+                        .foregroundStyle(FoodLogTheme.fatAmber)
+                    Text("结构短板与摄入不足日")
+                        .font(.subheadline.weight(.bold))
+                }
+
+                Text(report.underEatingDaysReview)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                ForEach(Array(report.dietStructureIssues.enumerated()), id: \.offset) { _, issue in
+                    HStack(alignment: .top, spacing: 8) {
+                        Circle()
+                            .fill(FoodLogTheme.fatAmber)
+                            .frame(width: 6, height: 6)
+                            .padding(.top, 6)
+                        Text(issue)
+                            .font(.footnote)
+                    }
+                }
+
+                Divider()
+
+                Text(report.estimationAndFluctuationDisclaimer)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color(.secondarySystemGroupedBackground))
+            )
+        }
+    }
+
+    // MARK: - 3. Saved Reports
+
+    private var savedReportsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("已保存报告")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+
+            ForEach(savedReportRecords.prefix(5)) { record in
+                if let decoded = record.decodedReport {
+                    Button {
+                        currentReport = decoded
+                        preparePDFExport(for: decoded)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(decoded.spanTitle) · \(decoded.dateRangeText)")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                Text(decoded.modelName)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color(.secondarySystemGroupedBackground))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 
@@ -251,7 +426,7 @@ public struct AIAnalysisView: View {
             modelContext.insert(SavedAnalysisReportRecord(report: report))
             try? modelContext.save()
         }
-        appState.showTemporaryBanner("分析报告已保存到本机")
+        appState.showTemporaryBanner("报告已保存")
     }
 
     private func preparePDFExport(for report: AIComprehensiveReport) {

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Home screenshots for FoodLog on iPhone simulator.
+# Multi-screen screenshots for FoodLog on iPhone simulator.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -46,17 +46,28 @@ while IFS= read -r line; do
   PICKED+=("$line")
 done < "$OUT/devices.txt"
 
-shoot() {
-  local udid="$1"
-  local name="$2"
-  xcrun simctl boot "$udid" || true
-  xcrun simctl bootstatus "$udid" -b
-  xcrun simctl install "$udid" "$APP"
-  xcrun simctl terminate "$udid" com.rookiei1.foodlog || true
-  xcrun simctl launch "$udid" com.rookiei1.foodlog -FoodLogInMemoryStore -FoodLogSeedSample
-  sleep 4
-  xcrun simctl io "$udid" screenshot "$OUT/home-${name}.png"
+UDID="${PICKED[0]}"
+NAME="${PICKED[1]}"
+
+xcrun simctl boot "$UDID" || true
+xcrun simctl bootstatus "$UDID" -b
+xcrun simctl install "$UDID" "$APP"
+
+capture_screen() {
+  local outfile="$1"
+  shift
+  xcrun simctl terminate "$UDID" com.rookiei1.foodlog || true
+  xcrun simctl launch "$UDID" com.rookiei1.foodlog -FoodLogInMemoryStore -FoodLogSeedSample "$@"
+  sleep 3
+  xcrun simctl io "$UDID" screenshot "$OUT/$outfile"
 }
 
-shoot "${PICKED[0]}" "${PICKED[1]}"
+capture_screen "01-home-dashboard.png" -FoodLogInitialTab dashboard
+cp "$OUT/01-home-dashboard.png" "$OUT/home-${NAME}.png"
+capture_screen "02-ai-photo-sheet.png" -FoodLogInitialTab dashboard -FoodLogOpenPhotoSheet
+capture_screen "03-food-list.png" -FoodLogInitialTab food
+capture_screen "04-weight-chart.png" -FoodLogInitialTab weight
+capture_screen "05-ai-analysis.png" -FoodLogInitialTab analysis
+capture_screen "06-settings.png" -FoodLogInitialTab settings
+
 find "$OUT" -name '*.png' -print
